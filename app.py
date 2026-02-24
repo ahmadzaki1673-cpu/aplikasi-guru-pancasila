@@ -75,7 +75,7 @@ if menu == "📝 Jurnal & Mapel":
         with st.form("form_jurnal"):
             c1, c2 = st.columns(2)
             tgl = c1.date_input("Tanggal", datetime.now())
-            materi = c2.text_input("Materi Pembelajaran", placeholder="Misal: Proyek Penguatan Profil Pelajar Pancasila")
+            materi = c2.text_input("Materi Pembelajaran")
             
             st.write("---")
             st.write(f"**Presensi Siswa {kls}:**")
@@ -84,131 +84,62 @@ if menu == "📝 Jurnal & Mapel":
             for nama in DAFTAR_SISWA[kls]:
                 col_n, col_o = st.columns([1, 2])
                 col_n.write(f"{nama}")
-                status_mapel[nama] = col_o.radio(
-                    f"S-{nama}", ["H", "S", "I", "A"], 
-                    horizontal=True, key=f"m_{kls}_{nama}", 
-                    label_visibility="collapsed"
-                )
+                status_mapel[nama] = col_o.radio(f"S-{nama}", ["H", "S", "I", "A"], horizontal=True, key=f"m_{kls}_{nama}", label_visibility="collapsed")
             
             if st.form_submit_button("Simpan Jurnal & Absen"):
                 if not materi:
                     st.error("Materi harus diisi!")
                 else:
-                    stats = list(status_mapel.values())
-                    ringkasan_abs = f"H:{stats.count('H')}, S:{stats.count('S')}, I:{stats.count('I')}, A:{stats.count('A')}"
+                    # LOGIKA BARU: Ambil hanya yang tidak hadir
+                    tidak_hadir = [f"{nama} ({st})" for nama, st in status_mapel.items() if st != "H"]
+                    ringkasan = ", ".join(tidak_hadir) if tidak_hadir else "Semua Hadir"
                     
                     simpan_data({
                         "Tanggal": str(tgl), 
                         "Kelas": kls, 
                         "Materi": materi, 
-                        "Ringkasan Presensi": ringkasan_abs,
-                        "Detail Presensi": ", ".join([f"{n}({s})" for n, s in status_mapel.items()])
+                        "Keterangan Absen": ringkasan,
+                        "Detail": ", ".join([f"{n}({s})" for n, s in status_mapel.items()])
                     }, FILE_JURNAL)
-                    st.success(f"✅ Jurnal {kls} Berhasil Disimpan!")
+                    st.success(f"✅ Jurnal Berhasil Disimpan!")
 
     with tab_rekap_jurnal:
         if os.path.isfile(FILE_JURNAL):
             df_j = pd.read_excel(FILE_JURNAL)
             df_j['Tanggal'] = pd.to_datetime(df_j['Tanggal']).dt.strftime('%d %b %Y')
             
-            # --- LOGIKA PENGAMAN KOLOM ---
-            kolom_wajib = ["Tanggal", "Kelas", "Materi"]
-            if "Ringkasan Presensi" in df_j.columns:
-                kolom_tampil = kolom_wajib + ["Ringkasan Presensi"]
-            else:
-                kolom_tampil = kolom_wajib
+            # Pengaman kolom jika ganti nama
+            kolom = ["Tanggal", "Kelas", "Materi"]
+            if "Keterangan Absen" in df_j.columns: kolom.append("Keterangan Absen")
+            elif "Ringkasan Presensi" in df_j.columns: kolom.append("Ringkasan Presensi")
 
-            c_f1, c_f2 = st.columns([1, 2])
-            f_kls_j = c_f1.selectbox("Filter Kelas:", ["Semua"] + list(DAFTAR_SISWA.keys()))
-            cari_materi = c_f2.text_input("🔍 Cari Materi:", placeholder="Ketik kata kunci...")
+            f_kls_j = st.selectbox("Filter Kelas:", ["Semua"] + list(DAFTAR_SISWA.keys()), key="f_j")
+            if f_kls_j != "Semua": df_j = df_j[df_j['Kelas'] == f_kls_j]
             
-            if f_kls_j != "Semua":
-                df_j = df_j[df_j['Kelas'] == f_kls_j]
-            if cari_materi:
-                df_j = df_j[df_j['Materi'].str.contains(cari_materi, case=False, na=False)]
-            
-            if not df_j.empty:
-                st.dataframe(df_j[kolom_tampil], use_container_width=True)
-                
-                if "Detail Presensi" in df_j.columns:
-                    with st.expander("Lihat Detail Presensi Siswa"):
-                        st.table(df_j[["Tanggal", "Materi", "Detail Presensi"]])
-            else:
-                st.warning("Data tidak ditemukan.")
+            st.dataframe(df_j[kolom], use_container_width=True)
         else:
-            st.info("Belum ada riwayat jurnal.")
+            st.info("Belum ada data jurnal.")
 
 # --- 2. PENILAIAN SISWA ---
 elif menu == "📊 Penilaian Siswa":
     t1, t2, t3 = st.tabs(["➕ Input Nilai", "🔎 Rekap Nilai", "📉 Analisis KKM"])
     with t1:
-        with st.expander("Form Input Nilai Baru", expanded=True):
-            cx, cy = st.columns(2)
-            k_n = cx.selectbox("Kelas Penilaian", list(DAFTAR_SISWA.keys()))
-            j_d = cx.selectbox("Jenis Penilaian", ["Tugas", "UH", "PTS", "PAS"])
-            m_p = cy.text_input("Materi Pokok / KD")
-            lbl = hitung_urutan(k_n, j_d)
-            cy.info(f"Label: **{lbl}**")
-            with st.form("f_nilai"):
-                list_n = []
-                for nama in DAFTAR_SISWA[k_n]:
-                    cn, cs = st.columns([2, 1])
-                    cn.write(nama)
-                    skor = cs.number_input(f"Nilai {nama}", 0, 100, 0, key=f"v_{nama}")
-                    list_n.append({"Nama": nama, "Kelas": k_n, "Jenis Dasar": j_d, "Materi Pokok": m_p, "Jenis Spesifik": lbl, "Nilai": skor})
-                if st.form_submit_button("Simpan Semua Nilai"):
-                    simpan_data(list_n, FILE_NILAI); st.success("✅ Tersimpan!"); st.rerun()
+        cx, cy = st.columns(2)
+        k_n = cx.selectbox("Kelas Penilaian", list(DAFTAR_SISWA.keys()))
+        j_d = cx.selectbox("Jenis Penilaian", ["Tugas", "UH", "PTS", "PAS"])
+        m_p = cy.text_input("Materi Pokok / KD")
+        lbl = hitung_urutan(k_n, j_d)
+        cy.info(f"Label: **{lbl}**")
+        with st.form("f_nilai"):
+            list_n = []
+            for nama in DAFTAR_SISWA[k_n]:
+                cn, cs = st.columns([2, 1])
+                cn.write(nama)
+                skor = cs.number_input(f"Nilai {nama}", 0, 100, 0, key=f"v_{nama}")
+                list_n.append({"Nama": nama, "Kelas": k_n, "Jenis Dasar": j_d, "Materi Pokok": m_p, "Jenis Spesifik": lbl, "Nilai": skor})
+            if st.form_submit_button("Simpan"):
+                simpan_data(list_n, FILE_NILAI); st.success("✅ Tersimpan!"); st.rerun()
     with t2:
         if os.path.isfile(FILE_NILAI):
             df_n = pd.read_excel(FILE_NILAI)
-            f_k = st.selectbox("Pilih Kelas:", list(DAFTAR_SISWA.keys()), key="f_rek_n")
-            df_f = df_n[df_n["Kelas"] == f_k]
-            if not df_f.empty:
-                pivot = df_f.pivot_table(index="Nama", columns="Jenis Spesifik", values="Nilai", aggfunc='first').reset_index()
-                st.dataframe(pivot, use_container_width=True)
-    with t3:
-        if os.path.isfile(FILE_NILAI):
-            kkm = st.number_input("KKM:", 0, 100, 75)
-            f_a = st.selectbox("Analisis Kelas:", list(DAFTAR_SISWA.keys()), key="analis_k")
-            df_a = pd.read_excel(FILE_NILAI)
-            df_a = df_a[df_a["Kelas"] == f_a]
-            if not df_a.empty:
-                rerata = df_a.groupby("Nama")["Nilai"].mean().reset_index()
-                rerata["Status"] = rerata["Nilai"].apply(lambda x: "✅ TUNTAS" if x >= kkm else "❌ REMEDIAL")
-                st.table(rerata)
-
-# --- 3. WALI KELAS 8 ---
-elif menu == "👨‍🏫 Wali Kelas 8":
-    tw1, tw2 = st.tabs(["📝 Input Harian WK", "📊 Rekap Kehadiran"])
-    with tw1:
-        with st.form("f_wk8"):
-            tgl_w = st.date_input("Tanggal", datetime.now())
-            data_w = []
-            for nama in DAFTAR_SISWA["Kelas 8"]:
-                cn, co = st.columns([1, 1])
-                cn.write(f"**{nama}**")
-                st_w = co.radio("S", ["H", "S", "I", "A"], horizontal=True, key=f"wk8_{nama}", label_visibility="collapsed")
-                map_w = {"H": "Hadir", "S": "Sakit", "I": "Izin", "A": "Alpa"}
-                data_w.append({"Tanggal": str(tgl_w), "Nama": nama.strip(), "Status": map_w[st_w]})
-            if st.form_submit_button("Simpan"):
-                simpan_data(data_w, FILE_ABSEN_WALI); st.success("✅ Berhasil!")
-    with tw2:
-        if os.path.isfile(FILE_ABSEN_WALI):
-            df_w = pd.read_excel(FILE_ABSEN_WALI)
-            df_w['Tanggal'] = pd.to_datetime(df_w['Tanggal'])
-            mode = st.selectbox("Periode:", ["Per Bulan", "Kustom"])
-            df_f_w = df_w.copy()
-            if mode == "Per Bulan":
-                b_p = st.selectbox("Bulan:", range(1, 13), format_func=lambda x: datetime(2026, x, 1).strftime('%B'))
-                df_f_w = df_w[df_w['Tanggal'].dt.month == b_p]
-            else:
-                c1, c2 = st.columns(2)
-                t1, t2 = c1.date_input("Dari"), c2.date_input("Ke")
-                df_f_w = df_w[(df_w['Tanggal'] >= pd.Timestamp(t1)) & (df_w['Tanggal'] <= pd.Timestamp(t2))]
-            
-            rekap_w = []
-            for i, nama in enumerate(DAFTAR_SISWA["Kelas 8"], start=1):
-                df_s = df_f_w[df_f_w['Nama'] == nama]
-                h, s, iz, al = len(df_s[df_s['Status']=="Hadir"]), len(df_s[df_s['Status']=="Sakit"]), len(df_s[df_s['Status']=="Izin"]), len(df_s[df_s['Status']=="Alpa"])
-                rekap_w.append({"No": i, "Nama": nama, "H": h, "S": s, "I": iz, "A": al, "Total": s+iz+al})
-            st.table(pd.DataFrame(rekap_w).set_index('No'))
+            f_k = st.selectbox("

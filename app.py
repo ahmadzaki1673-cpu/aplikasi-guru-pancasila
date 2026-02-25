@@ -10,7 +10,7 @@ st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- GANTI LINK DI BAWAH INI DENGAN LINK GOOGLE SHEETS BAPAK/IBU ---
-URL_SHEET = "https://docs.google.com/spreadsheets/d/1hB5bipwoyv6VHHk2Cc1HfPYyknVV-y0WLx0Os5h1Ypg/edit?usp=drive_link"
+URL_SHEET = "MASUKKAN_LINK_GOOGLE_SHEETS_BAPAK_DI_SINI"
 
 # --- DATA MASTER SISWA ---
 DAFTAR_SISWA = {
@@ -19,19 +19,9 @@ DAFTAR_SISWA = {
     "Kelas 9": ["AHMAD MUHAJIR", "JAUHAR LATIFFAH", "MUHAMMAD ANSARI", "MUHAMMAD HAFIDZ NAUFAL", "MUHAMMAD ILYAS"]
 }
 
-# --- TEMA TAMPILAN ---
-st.markdown("""
-    <style>
-    .stApp { background-color: #0e1117; color: white; }
-    [data-testid="stSidebar"] { background-color: #112244; }
-    .stButton>button { background-color: #2563eb; color: white; border-radius: 8px; width: 100%; }
-    </style>
-    """, unsafe_allow_html=True)
-
 # --- FUNGSI AMBIL DATA ---
 def ambil_data(worksheet_name):
     try:
-        # Menambahkan parameter ttl=0 agar data selalu segar (tidak tersimpan di cache)
         return conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
     except:
         return pd.DataFrame()
@@ -40,45 +30,76 @@ def ambil_data(worksheet_name):
 def simpan_data(df_baru, worksheet_name):
     df_lama = ambil_data(worksheet_name)
     if not df_lama.empty:
-        # Gabungkan data lama dengan data baru
         df_final = pd.concat([df_lama, df_baru], ignore_index=True)
     else:
         df_final = df_baru
-    
-    # Bersihkan baris kosong jika ada
-    df_final = df_final.dropna(how='all')
-    
-    # Kirim ke Google Sheets
     conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_final)
     st.cache_data.clear()
 
-# --- NAVIGASI UTAMA ---
+# --- NAVIGASI ---
 st.sidebar.title("MENU UTAMA")
 menu = st.sidebar.radio("Pilih Fitur:", ["📝 Jurnal & Mapel", "📊 Penilaian Siswa", "👨‍🏫 Wali Kelas 8"])
 
 # --- 1. JURNAL & MAPEL ---
 if menu == "📝 Jurnal & Mapel":
-    st.header("Jurnal Mengajar & Presensi Mapel")
-    t1, t2 = st.tabs(["➕ Isi Jurnal Baru", "📋 Rekap Jurnal & Materi"])
+    st.header("Jurnal Mengajar & Presensi")
+    t1, t2 = st.tabs(["➕ Isi Jurnal", "📋 Rekap Jurnal"])
     
     with t1:
         kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
-        with st.form("form_jurnal"):
-            c1, c2 = st.columns(2)
-            tgl = c1.date_input("Tanggal", datetime.now())
-            materi = c2.text_input("Materi Pembelajaran", placeholder="Contoh: Norma dan Keadilan")
-            
+        with st.form("f_jurnal"):
+            tgl = st.date_input("Tanggal", datetime.now())
+            materi = st.text_input("Materi Pembelajaran")
             st.write("---")
-            st.write(f"**Presensi Siswa {kls}:**")
             status_mapel = {}
             for nama in DAFTAR_SISWA[kls]:
-                col_n, col_o = st.columns([2, 1])
-                col_n.write(nama)
-                status_mapel[nama] = col_o.radio(f"S-{nama}", ["H", "S", "I", "A"], horizontal=True, key=f"j_{nama}", label_visibility="collapsed")
+                c_n, c_o = st.columns([2, 1])
+                c_n.write(nama)
+                status_mapel[nama] = c_o.radio(f"S-{nama}", ["H", "S", "I", "A"], horizontal=True, key=f"j_{nama}", label_visibility="collapsed")
             
             if st.form_submit_button("Simpan ke Google Sheets"):
-                if not materi:
-                    st.error("Materi harus diisi!")
-                else:
-                    # Ambil hanya siswa yang tidak hadir
-                    absen = [f"{n}({s})" for n, s in status_mapel.items() if s != "
+                # Baris yang tadi error (Sekarang sudah lengkap):
+                absen = [f"{n}({s})" for n, s in status_mapel.items() if s != "H"]
+                ringkasan = ", ".join(absen) if absen else "Semua Hadir"
+                
+                df_j = pd.DataFrame([{"Tanggal": str(tgl), "Kelas": kls, "Materi": materi, "Keterangan Absen": ringkasan}])
+                simpan_data(df_j, "Jurnal")
+                st.success("Data Berhasil Tersimpan!")
+
+    with t2:
+        df_view = ambil_data("Jurnal")
+        if not df_view.empty:
+            st.dataframe(df_view, use_container_width=True)
+        else: st.info("Belum ada data.")
+
+# --- 2. PENILAIAN SISWA ---
+elif menu == "📊 Penilaian Siswa":
+    st.header("Penilaian Siswa")
+    kls_n = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()), key="kn")
+    with st.form("f_nilai"):
+        j_d = st.selectbox("Jenis", ["Tugas", "UH", "PTS", "PAS"])
+        mat = st.text_input("Materi Pokok")
+        data_nilai = []
+        for nama in DAFTAR_SISWA[kls_n]:
+            c_n, c_v = st.columns([2, 1])
+            c_n.write(nama)
+            skor = c_v.number_input(f"Nilai {nama}", 0, 100, 75, key=f"v_{nama}")
+            data_nilai.append({"Tanggal": str(datetime.now().date()), "Nama": nama, "Kelas": kls_n, "Jenis": j_d, "Materi": mat, "Nilai": skor})
+        if st.form_submit_button("Simpan Nilai"):
+            simpan_data(pd.DataFrame(data_nilai), "Nilai")
+            st.success("Nilai Masuk ke Google Sheets!")
+
+# --- 3. WALI KELAS 8 ---
+elif menu == "👨‍🏫 Wali Kelas 8":
+    st.header("Absensi Wali Kelas 8")
+    with st.form("f_wk"):
+        tgl_w = st.date_input("Tanggal", datetime.now())
+        data_w = []
+        for nama in DAFTAR_SISWA["Kelas 8"]:
+            c_n, c_s = st.columns([2, 1])
+            c_n.write(nama)
+            st_w = c_s.radio(f"S-{nama}", ["H", "S", "I", "A"], horizontal=True, key=f"w_{nama}", label_visibility="collapsed")
+            data_w.append({"Tanggal": str(tgl_w), "Nama": nama, "Status": st_w})
+        if st.form_submit_button("Simpan Absen Wali"):
+            simpan_data(pd.DataFrame(data_w), "AbsenWali")
+            st.success("Absensi Wali Kelas Aman!")

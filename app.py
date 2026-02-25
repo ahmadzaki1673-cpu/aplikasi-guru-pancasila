@@ -9,7 +9,7 @@ st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # GANTI LINK DI BAWAH INI DENGAN LINK BARU HASIL "SAVE AS GOOGLE SHEETS"
-URL_SHEET = "https://docs.google.com/spreadsheets/d/1M8ZQzyinx2ur0c4SR-JrARoe5LsAMRf-9-zU9vUi2-k/edit?gid=92340672#gid=92340672"
+URL_SHEET = "https://docs.google.com/spreadsheets/d/1M8ZQzyinx2ur0c4SR-JrARoe5LsAMRf-9-zU9vUi2-k/edit?usp=sharing"
 
 DAFTAR_SISWA = {
     "Kelas 7": ["AHMAD DHANI SAPUTRA", "KHAIRUL IBRAHIM", "MUHAMMAD ARDI", "MUHAMMAD FADHIL FADKHULURRAHMAN", "MUHAMMAD RIFA ALIF", "MUHAMMAD RIFKY", "MUHAMMAD ROBY", "RAFI'I HAMDI", "ROMIZAH"],
@@ -68,3 +68,4 @@ elif menu == "👨‍🏫 Wali Kelas":
         data_w = [{"Tanggal": str(tgl), "Nama": n, "Status": st.radio(n, ["H", "S", "I", "A"], horizontal=True)} for n in DAFTAR_SISWA["Kelas 8"]]
         if st.form_submit_button("Simpan"):
             if simpan_data(pd.DataFrame(data_w), "AbsenWali"): st.success("Wali Kelas Aman!")
+

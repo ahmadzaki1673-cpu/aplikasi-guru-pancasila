@@ -7,6 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
 
 # --- 2. KONEKSI GOOGLE SHEETS ---
+# Biarkan koneksi ini mencari 'gcp_service_account' di Secrets secara otomatis
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- LINK GOOGLE SHEETS BAPAK/IBU ---
@@ -22,12 +23,8 @@ DAFTAR_SISWA = {
 # --- 4. FUNGSI AMBIL DATA ---
 def ambil_data(worksheet_name):
     try:
-        return conn.read(
-            spreadsheet=URL_SHEET, 
-            worksheet=worksheet_name,
-            service_account_info=st.secrets["gcp_service_account"],
-            ttl=0
-        )
+        # Kita panggil koneksi secara sederhana
+        return conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
     except Exception:
         return pd.DataFrame()
 
@@ -40,12 +37,8 @@ def simpan_data(df_baru, worksheet_name):
         else:
             df_final = df_baru
             
-        conn.update(
-            spreadsheet=URL_SHEET, 
-            worksheet=worksheet_name, 
-            data=df_final,
-            service_account_info=st.secrets["gcp_service_account"]
-        )
+        # Perintah update SEHARUSNYA TIDAK pakai service_account_info di dalam kurung
+        conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_final)
         st.cache_data.clear()
         return True
     except Exception as e:

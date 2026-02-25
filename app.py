@@ -3,50 +3,48 @@ import pandas as pd
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
-# --- KONFIGURASI HALAMAN ---
+# --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
 
-# --- KONEKSI GOOGLE SHEETS ---
+# --- 2. KONEKSI GOOGLE SHEETS ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- MASUKKAN LINK GOOGLE SHEETS BAPAK/IBU DI SINI ---
 URL_SHEET = "https://docs.google.com/spreadsheets/d/1VTZg1gLVmdfKCNsKOfDz9EVrqE2wEBGb/edit?usp=sharing&ouid=116065546011273727460&rtpof=true&sd=true"
 
-# --- DATA MASTER SISWA ---
+# --- 3. DATA MASTER SISWA ---
 DAFTAR_SISWA = {
     "Kelas 7": ["AHMAD DHANI SAPUTRA", "KHAIRUL IBRAHIM", "MUHAMMAD ARDI", "MUHAMMAD FADHIL FADKHULURRAHMAN", "MUHAMMAD RIFA ALIF", "MUHAMMAD RIFKY", "MUHAMMAD ROBY", "RAFI'I HAMDI", "ROMIZAH"],
     "Kelas 8": ["MAULANA REZKI", "NESYA AULIA PUTRI", "RAHMAD HIDAYATULLAH", "SYARIF HIDAYAT"],
     "Kelas 9": ["AHMAD MUHAJIR", "JAUHAR LATIFFAH", "MUHAMMAD ANSARI", "MUHAMMAD HAFIDZ NAUFAL", "MUHAMMAD ILYAS"]
 }
 
-# --- FUNGSI AMBIL DATA ---
+# --- 4. FUNGSI AMBIL DATA ---
 def ambil_data(worksheet_name):
     try:
         return conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
     except:
         return pd.DataFrame()
 
-# --- FUNGSI SIMPAN DATA ---
-# --- FUNGSI SIMPAN DATA (VERSI ANTI-ERROR) ---
+# --- 5. FUNGSI SIMPAN DATA ---
 def simpan_data(df_baru, worksheet_name):
     try:
-        # 1. Coba ambil data lama dari Google Sheets
         df_lama = conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
-        
-        # 2. Jika ada data lama, gabungkan dengan data baru
         if df_lama is not None and not df_lama.empty:
             df_final = pd.concat([df_lama, df_baru], ignore_index=True)
         else:
             df_final = df_baru
-    except Exception:
-        # 3. Jika gagal baca (karena sheet dianggap kosong), langsung pakai data baru
+    except:
         df_final = df_baru
     
-    # 4. Kirim data final kembali ke Google Sheets
-    # Pastikan nama worksheet (Jurnal, Nilai, atau AbsenWali) persis sama
     conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_final)
     st.cache_data.clear()
-# --- 1. JURNAL & MAPEL ---
+
+# --- 6. NAVIGASI (Sangat Penting: Bagian ini harus ada) ---
+st.sidebar.title("MENU UTAMA")
+menu = st.sidebar.radio("Pilih Fitur:", ["📝 Jurnal & Mapel", "📊 Penilaian Siswa", "👨‍🏫 Wali Kelas 8"])
+
+# --- 7. LOGIKA MENU ---
 if menu == "📝 Jurnal & Mapel":
     st.header("Jurnal Mengajar & Presensi")
     t1, t2 = st.tabs(["➕ Isi Jurnal", "📋 Rekap Jurnal"])
@@ -76,7 +74,6 @@ if menu == "📝 Jurnal & Mapel":
             st.dataframe(df_view, use_container_width=True)
         else: st.info("Belum ada data di Google Sheets.")
 
-# --- 2. PENILAIAN SISWA ---
 elif menu == "📊 Penilaian Siswa":
     st.header("Penilaian Siswa")
     kls_n = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()), key="kn")
@@ -91,9 +88,8 @@ elif menu == "📊 Penilaian Siswa":
             data_nilai.append({"Tanggal": str(datetime.now().date()), "Nama": nama, "Kelas": kls_n, "Jenis": j_d, "Materi": mat, "Nilai": skor})
         if st.form_submit_button("Simpan Nilai"):
             simpan_data(pd.DataFrame(data_nilai), "Nilai")
-            st.success("Nilai Masuk!")
+            st.success("Nilai Berhasil Masuk!")
 
-# --- 3. WALI KELAS 8 ---
 elif menu == "👨‍🏫 Wali Kelas 8":
     st.header("Absensi Wali Kelas 8")
     with st.form("f_wk"):
@@ -107,7 +103,3 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             simpan_data(pd.DataFrame(data_w), "AbsenWali")
             st.success("Absensi Wali Kelas Aman!")
-
-
-
-

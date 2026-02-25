@@ -9,8 +9,8 @@ st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
 # --- 2. KONEKSI GOOGLE SHEETS ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- MASUKKAN LINK GOOGLE SHEETS BAPAK/IBU DI SINI ---
-URL_SHEET = "https://docs.google.com/spreadsheets/d/1VTZg1gLVmdfKCNsKOfDz9EVrqE2wEBGb/edit?usp=sharing&ouid=116065546011273727460&rtpof=true&sd=true"
+# --- LINK GOOGLE SHEETS BAPAK/IBU ---
+URL_SHEET = "https://docs.google.com/spreadsheets/d/1VTZg1gLVmdfKCNsKOfDz9EVrqE2wEBGb/edit?usp=sharing"
 
 # --- 3. DATA MASTER SISWA ---
 DAFTAR_SISWA = {
@@ -26,21 +26,27 @@ def ambil_data(worksheet_name):
     except:
         return pd.DataFrame()
 
-# --- 5. FUNGSI SIMPAN DATA ---
-# --- FUNGSI SIMPAN DATA (VERSI TERKUAT) ---
+# --- 5. FUNGSI SIMPAN DATA (VERSI BERSIH) ---
 def simpan_data(df_baru, worksheet_name):
     try:
-        # Gunakan create untuk memastikan data terkirim meskipun sheet baru terisi judul
-        conn.create(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_baru)
+        # Ambil data lama
+        df_lama = ambil_data(worksheet_name)
+        
+        # Gabungkan data lama dengan data baru
+        if not df_lama.empty:
+            df_final = pd.concat([df_lama, df_baru], ignore_index=True)
+        else:
+            df_final = df_baru
+            
+        # Update ke Google Sheets
+        conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_final)
         st.cache_data.clear()
-        st.success(f"✅ Data berhasil dikirim ke tab {worksheet_name}!")
+        return True
     except Exception as e:
-        st.error(f"Gagal menyimpan: {e}")
-    
-    conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_final)
-    st.cache_data.clear()
+        st.error(f"Gagal menyimpan ke {worksheet_name}: {e}")
+        return False
 
-# --- 6. NAVIGASI (Sangat Penting: Bagian ini harus ada) ---
+# --- 6. NAVIGASI ---
 st.sidebar.title("MENU UTAMA")
 menu = st.sidebar.radio("Pilih Fitur:", ["📝 Jurnal & Mapel", "📊 Penilaian Siswa", "👨‍🏫 Wali Kelas 8"])
 
@@ -62,11 +68,14 @@ if menu == "📝 Jurnal & Mapel":
                 status_mapel[nama] = c_o.radio(f"S-{nama}", ["H", "S", "I", "A"], horizontal=True, key=f"j_{nama}", label_visibility="collapsed")
             
             if st.form_submit_button("Simpan ke Google Sheets"):
-                absen = [f"{n}({s})" for n, s in status_mapel.items() if s != "H"]
-                ringkasan = ", ".join(absen) if absen else "Semua Hadir"
-                df_j = pd.DataFrame([{"Tanggal": str(tgl), "Kelas": kls, "Materi": materi, "Keterangan Absen": ringkasan}])
-                simpan_data(df_j, "Jurnal")
-                st.success("Data Berhasil Tersimpan!")
+                if materi:
+                    absen = [f"{n}({s})" for n, s in status_mapel.items() if s != "H"]
+                    ringkasan = ", ".join(absen) if absen else "Semua Hadir"
+                    df_j = pd.DataFrame([{"Tanggal": str(tgl), "Kelas": kls, "Materi": materi, "Keterangan Absen": ringkasan}])
+                    if simpan_data(df_j, "Jurnal"):
+                        st.success("✅ Data Jurnal Berhasil Tersimpan!")
+                else:
+                    st.warning("Materi tidak boleh kosong!")
 
     with t2:
         df_view = ambil_data("Jurnal")
@@ -86,9 +95,10 @@ elif menu == "📊 Penilaian Siswa":
             c_n.write(nama)
             skor = c_v.number_input(f"Nilai {nama}", 0, 100, 75, key=f"v_{nama}")
             data_nilai.append({"Tanggal": str(datetime.now().date()), "Nama": nama, "Kelas": kls_n, "Jenis": j_d, "Materi": mat, "Nilai": skor})
+        
         if st.form_submit_button("Simpan Nilai"):
-            simpan_data(pd.DataFrame(data_nilai), "Nilai")
-            st.success("Nilai Berhasil Masuk!")
+            if simpan_data(pd.DataFrame(data_nilai), "Nilai"):
+                st.success("✅ Nilai Berhasil Masuk!")
 
 elif menu == "👨‍🏫 Wali Kelas 8":
     st.header("Absensi Wali Kelas 8")
@@ -100,8 +110,7 @@ elif menu == "👨‍🏫 Wali Kelas 8":
             c_n.write(nama)
             st_w = c_s.radio(f"S-{nama}", ["H", "S", "I", "A"], horizontal=True, key=f"w_{nama}", label_visibility="collapsed")
             data_w.append({"Tanggal": str(tgl_w), "Nama": nama, "Status": st_w})
+            
         if st.form_submit_button("Simpan Absen Wali"):
-            simpan_data(pd.DataFrame(data_w), "AbsenWali")
-            st.success("Absensi Wali Kelas Aman!")
-
-
+            if simpan_data(pd.DataFrame(data_w), "AbsenWali"):
+                st.success("✅ Absensi Wali Kelas Aman!")

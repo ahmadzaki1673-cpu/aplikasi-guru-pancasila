@@ -27,15 +27,15 @@ def ambil_data(worksheet_name):
         return pd.DataFrame()
 
 # --- 5. FUNGSI SIMPAN DATA ---
+# --- FUNGSI SIMPAN DATA (VERSI TERKUAT) ---
 def simpan_data(df_baru, worksheet_name):
     try:
-        df_lama = conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
-        if df_lama is not None and not df_lama.empty:
-            df_final = pd.concat([df_lama, df_baru], ignore_index=True)
-        else:
-            df_final = df_baru
-    except:
-        df_final = df_baru
+        # Gunakan create untuk memastikan data terkirim meskipun sheet baru terisi judul
+        conn.create(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_baru)
+        st.cache_data.clear()
+        st.success(f"✅ Data berhasil dikirim ke tab {worksheet_name}!")
+    except Exception as e:
+        st.error(f"Gagal menyimpan: {e}")
     
     conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_final)
     st.cache_data.clear()
@@ -103,4 +103,5 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             simpan_data(pd.DataFrame(data_w), "AbsenWali")
             st.success("Absensi Wali Kelas Aman!")
+
 

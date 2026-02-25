@@ -46,7 +46,6 @@ def simpan_data(df_baru, worksheet_name):
     # Pastikan nama worksheet (Jurnal, Nilai, atau AbsenWali) persis sama
     conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_final)
     st.cache_data.clear()
-    
 # --- 1. JURNAL & MAPEL ---
 if menu == "📝 Jurnal & Mapel":
     st.header("Jurnal Mengajar & Presensi")
@@ -108,6 +107,7 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             simpan_data(pd.DataFrame(data_w), "AbsenWali")
             st.success("Absensi Wali Kelas Aman!")
+
 
 
 

@@ -27,14 +27,26 @@ def ambil_data(worksheet_name):
         return pd.DataFrame()
 
 # --- FUNGSI SIMPAN DATA ---
+# --- FUNGSI SIMPAN DATA (VERSI ANTI-ERROR) ---
 def simpan_data(df_baru, worksheet_name):
-    # Langsung tulis saja tanpa baca data lama untuk tes pertama
-    conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_baru)
+    try:
+        # 1. Coba ambil data lama dari Google Sheets
+        df_lama = conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
+        
+        # 2. Jika ada data lama, gabungkan dengan data baru
+        if df_lama is not None and not df_lama.empty:
+            df_final = pd.concat([df_lama, df_baru], ignore_index=True)
+        else:
+            df_final = df_baru
+    except Exception:
+        # 3. Jika gagal baca (karena sheet dianggap kosong), langsung pakai data baru
+        df_final = df_baru
+    
+    # 4. Kirim data final kembali ke Google Sheets
+    # Pastikan nama worksheet (Jurnal, Nilai, atau AbsenWali) persis sama
+    conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_final)
     st.cache_data.clear()
-# --- NAVIGASI ---
-st.sidebar.title("MENU UTAMA")
-menu = st.sidebar.radio("Pilih Fitur:", ["📝 Jurnal & Mapel", "📊 Penilaian Siswa", "👨‍🏫 Wali Kelas 8"])
-
+    
 # --- 1. JURNAL & MAPEL ---
 if menu == "📝 Jurnal & Mapel":
     st.header("Jurnal Mengajar & Presensi")
@@ -96,5 +108,6 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             simpan_data(pd.DataFrame(data_w), "AbsenWali")
             st.success("Absensi Wali Kelas Aman!")
+
 
 

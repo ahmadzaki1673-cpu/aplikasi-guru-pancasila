@@ -3,16 +3,14 @@ import pandas as pd
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
-# --- 1. KONFIGURASI HALAMAN ---
+# --- KONFIGURASI ---
 st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
 
-# --- 2. KONEKSI GOOGLE SHEETS ---
-# Biarkan koneksi ini mencari 'gcp_service_account' di Secrets secara otomatis
+# --- KONEKSI ---
+# Biarkan kosong agar dia otomatis mencari [connections.gsheets] di Secrets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- LINK GOOGLE SHEETS BAPAK/IBU ---
-URL_SHEET = "https://docs.google.com/spreadsheets/d/1VTZg1gLVmdfKCNsKOfDz9EVrqE2wEBGb/edit?usp=sharing"
-
+URL_SHEET = "https://docs.google.com/spreadsheets/d/1VTZg1gLVmdfKCNsKOfDz9EVrqE2wEBGb/edit#gid=0"
 # --- 3. DATA MASTER SISWA ---
 DAFTAR_SISWA = {
     "Kelas 7": ["AHMAD DHANI SAPUTRA", "KHAIRUL IBRAHIM", "MUHAMMAD ARDI", "MUHAMMAD FADHIL FADKHULURRAHMAN", "MUHAMMAD RIFA ALIF", "MUHAMMAD RIFKY", "MUHAMMAD ROBY", "RAFI'I HAMDI", "ROMIZAH"],
@@ -114,3 +112,4 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             if simpan_data(pd.DataFrame(data_w), "AbsenWali"):
                 st.success("✅ Absensi Wali Kelas Aman!")
+

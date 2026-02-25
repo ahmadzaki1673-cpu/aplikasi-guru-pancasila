@@ -10,7 +10,7 @@ st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- GANTI LINK DI BAWAH INI DENGAN LINK GOOGLE SHEETS BAPAK/IBU ---
-URL_SHEET = "https://docs.google.com/spreadsheets/d/1hB5bipwoyv6VHHk2Cc1HfPYyknVV-y0WLx0Os5h1Ypg/edit?usp=drive_link"
+URL_SHEET = "https://docs.google.com/spreadsheets/d/1hB5bipwoyv6VHHk2Cc1HfPYyknVV-y0WLx0Os5h1Ypg/edit?usp=sharing"
 
 # --- DATA MASTER SISWA ---
 DAFTAR_SISWA = {
@@ -103,4 +103,5 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             simpan_data(pd.DataFrame(data_w), "AbsenWali")
             st.success("Absensi Wali Kelas Aman!")
+
 

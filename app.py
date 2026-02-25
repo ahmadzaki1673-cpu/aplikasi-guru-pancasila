@@ -7,43 +7,41 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
 
 # --- 2. KONEKSI GOOGLE SHEETS ---
-conn = st.connection("gsheets", type=GSheetsConnection, service_account_info=st.secrets["gcp_service_account"])
-
-# --- LINK GOOGLE SHEETS BAPAK/IBU ---
-URL_SHEET = "https://docs.google.com/spreadsheets/d/1VTZg1gLVmdfKCNsKOfDz9EVrqE2wEBGb/edit?usp=sharing"
-
-# --- 3. DATA MASTER SISWA ---
-DAFTAR_SISWA = {
-    "Kelas 7": ["AHMAD DHANI SAPUTRA", "KHAIRUL IBRAHIM", "MUHAMMAD ARDI", "MUHAMMAD FADHIL FADKHULURRAHMAN", "MUHAMMAD RIFA ALIF", "MUHAMMAD RIFKY", "MUHAMMAD ROBY", "RAFI'I HAMDI", "ROMIZAH"],
-    "Kelas 8": ["MAULANA REZKI", "NESYA AULIA PUTRI", "RAHMAD HIDAYATULLAH", "SYARIF HIDAYAT"],
-    "Kelas 9": ["AHMAD MUHAJIR", "JAUHAR LATIFFAH", "MUHAMMAD ANSARI", "MUHAMMAD HAFIDZ NAUFAL", "MUHAMMAD ILYAS"]
-}
+# Kita buat koneksi standar tanpa memasukkan kunci ke dalam fungsi cache
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- 4. FUNGSI AMBIL DATA ---
 def ambil_data(worksheet_name):
     try:
-        return conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
+        # Kita hapus parameter ttl agar tidak terjadi UnhashableParamError
+        return conn.read(
+            spreadsheet=URL_SHEET, 
+            worksheet=worksheet_name,
+            service_account_info=st.secrets["gcp_service_account"]
+        )
     except:
         return pd.DataFrame()
 
-# --- 5. FUNGSI SIMPAN DATA (VERSI BERSIH) ---
+# --- 5. FUNGSI SIMPAN DATA ---
 def simpan_data(df_baru, worksheet_name):
     try:
-        # Ambil data lama
         df_lama = ambil_data(worksheet_name)
-        
-        # Gabungkan data lama dengan data baru
         if not df_lama.empty:
             df_final = pd.concat([df_lama, df_baru], ignore_index=True)
         else:
             df_final = df_baru
             
-        # Update ke Google Sheets
-        conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_final)
+        # Tambahkan service_account_info di sini juga untuk izin menulis
+        conn.update(
+            spreadsheet=URL_SHEET, 
+            worksheet=worksheet_name, 
+            data=df_final,
+            service_account_info=st.secrets["gcp_service_account"]
+        )
         st.cache_data.clear()
         return True
     except Exception as e:
-        st.error(f"Gagal menyimpan ke {worksheet_name}: {e}")
+        st.error(f"Gagal menyimpan: {e}")
         return False
 
 # --- 6. NAVIGASI ---
@@ -114,4 +112,5 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             if simpan_data(pd.DataFrame(data_w), "AbsenWali"):
                 st.success("✅ Absensi Wali Kelas Aman!")
+
 

@@ -7,31 +7,39 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
 
 # --- 2. KONEKSI GOOGLE SHEETS ---
-# Kita buat koneksi standar tanpa memasukkan kunci ke dalam fungsi cache
 conn = st.connection("gsheets", type=GSheetsConnection)
+
+# --- LINK GOOGLE SHEETS BAPAK/IBU ---
+URL_SHEET = "https://docs.google.com/spreadsheets/d/1VTZg1gLVmdfKCNsKOfDz9EVrqE2wEBGb/edit?usp=sharing"
+
+# --- 3. DATA MASTER SISWA ---
+DAFTAR_SISWA = {
+    "Kelas 7": ["AHMAD DHANI SAPUTRA", "KHAIRUL IBRAHIM", "MUHAMMAD ARDI", "MUHAMMAD FADHIL FADKHULURRAHMAN", "MUHAMMAD RIFA ALIF", "MUHAMMAD RIFKY", "MUHAMMAD ROBY", "RAFI'I HAMDI", "ROMIZAH"],
+    "Kelas 8": ["MAULANA REZKI", "NESYA AULIA PUTRI", "RAHMAD HIDAYATULLAH", "SYARIF HIDAYAT"],
+    "Kelas 9": ["AHMAD MUHAJIR", "JAUHAR LATIFFAH", "MUHAMMAD ANSARI", "MUHAMMAD HAFIDZ NAUFAL", "MUHAMMAD ILYAS"]
+}
 
 # --- 4. FUNGSI AMBIL DATA ---
 def ambil_data(worksheet_name):
     try:
-        # Kita hapus parameter ttl agar tidak terjadi UnhashableParamError
         return conn.read(
             spreadsheet=URL_SHEET, 
             worksheet=worksheet_name,
-            service_account_info=st.secrets["gcp_service_account"]
+            service_account_info=st.secrets["gcp_service_account"],
+            ttl=0
         )
-    except:
+    except Exception:
         return pd.DataFrame()
 
 # --- 5. FUNGSI SIMPAN DATA ---
 def simpan_data(df_baru, worksheet_name):
     try:
         df_lama = ambil_data(worksheet_name)
-        if not df_lama.empty:
+        if df_lama is not None and not df_lama.empty:
             df_final = pd.concat([df_lama, df_baru], ignore_index=True)
         else:
             df_final = df_baru
             
-        # Tambahkan service_account_info di sini juga untuk izin menulis
         conn.update(
             spreadsheet=URL_SHEET, 
             worksheet=worksheet_name, 
@@ -79,7 +87,8 @@ if menu == "📝 Jurnal & Mapel":
         df_view = ambil_data("Jurnal")
         if not df_view.empty:
             st.dataframe(df_view, use_container_width=True)
-        else: st.info("Belum ada data di Google Sheets.")
+        else:
+            st.info("Belum ada data di Google Sheets.")
 
 elif menu == "📊 Penilaian Siswa":
     st.header("Penilaian Siswa")
@@ -112,5 +121,3 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             if simpan_data(pd.DataFrame(data_w), "AbsenWali"):
                 st.success("✅ Absensi Wali Kelas Aman!")
-
-

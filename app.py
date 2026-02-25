@@ -28,8 +28,6 @@ def ambil_data(worksheet_name):
 
 # --- FUNGSI SIMPAN DATA ---
 def simpan_data(df_baru, worksheet_name):
-   # --- FUNGSI SIMPAN DATA (VERSI TERBARU) ---
-def simpan_data(df_baru, worksheet_name):
     try:
         # Kita coba baca dulu, kalau gagal berarti sheet kosong
         df_lama = conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
@@ -106,6 +104,7 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             simpan_data(pd.DataFrame(data_w), "AbsenWali")
             st.success("Absensi Wali Kelas Aman!")
+
 
 
 

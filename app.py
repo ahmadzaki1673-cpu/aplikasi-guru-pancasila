@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
 
 # --- 2. KONEKSI GOOGLE SHEETS ---
-conn = st.connection("gsheets", type=GSheetsConnection)
+conn = st.connection("gsheets", type=GSheetsConnection, service_account_info=st.secrets["gcp_service_account"])
 
 # --- LINK GOOGLE SHEETS BAPAK/IBU ---
 URL_SHEET = "https://docs.google.com/spreadsheets/d/1VTZg1gLVmdfKCNsKOfDz9EVrqE2wEBGb/edit?usp=sharing"
@@ -114,3 +114,4 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             if simpan_data(pd.DataFrame(data_w), "AbsenWali"):
                 st.success("✅ Absensi Wali Kelas Aman!")
+

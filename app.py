@@ -28,16 +28,19 @@ def ambil_data(worksheet_name):
 
 # --- FUNGSI SIMPAN DATA ---
 def simpan_data(df_baru, worksheet_name):
-    df_lama = ambil_data(worksheet_name)
-    if not df_lama.empty:
+   # --- FUNGSI SIMPAN DATA (VERSI TERBARU) ---
+def simpan_data(df_baru, worksheet_name):
+    try:
+        # Kita coba baca dulu, kalau gagal berarti sheet kosong
+        df_lama = conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
         df_final = pd.concat([df_lama, df_baru], ignore_index=True)
-    else:
+    except:
+        # Jika sheet kosong atau belum ada, pakai data baru saja
         df_final = df_baru
+    
+    # Gunakan clear_cache agar data langsung muncul
     conn.update(spreadsheet=URL_SHEET, worksheet=worksheet_name, data=df_final)
     st.cache_data.clear()
-
-# --- NAVIGASI ---
-st.sidebar.title("MENU UTAMA")
 menu = st.sidebar.radio("Pilih Fitur:", ["📝 Jurnal & Mapel", "📊 Penilaian Siswa", "👨‍🏫 Wali Kelas 8"])
 
 # --- 1. JURNAL & MAPEL ---
@@ -103,5 +106,6 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         if st.form_submit_button("Simpan Absen Wali"):
             simpan_data(pd.DataFrame(data_w), "AbsenWali")
             st.success("Absensi Wali Kelas Aman!")
+
 
 

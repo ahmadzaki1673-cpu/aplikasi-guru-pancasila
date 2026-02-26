@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import calendar
-import plotly.express as px # Untuk grafik
+import plotly.express as px
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. KONFIGURASI HALAMAN ---
@@ -37,12 +37,10 @@ def simpan_data(df_baru, worksheet_name):
         st.error(f"Gagal menyimpan: {e}")
         return False
 
-# --- 5. TAMPILAN MENU SIDEBAR ---
+# --- TAMPILAN MENU ---
 with st.sidebar:
     st.title("🛠️ MENU UTAMA")
     menu = st.selectbox("Pilih Fitur:", ["📝 Input Jurnal", "📊 Input Nilai Siswa", "👨‍🏫 Wali Kelas 8", "📂 Rekap Data"])
-    st.divider()
-    st.info("Aplikasi Jurnal Guru Pancasila v3.0 - Fitur Cetak & Grafik Aktif")
 
 # --- FUNGSI PEMBANTU UNTUK FILTER TANGGAL ---
 def filter_periode_ui(key_prefix):
@@ -66,7 +64,7 @@ def filter_periode_ui(key_prefix):
             tgl_selesai = st.date_input("Sampai Tanggal", datetime.now(), key=f"end_{key_prefix}")
     return tgl_mulai, tgl_selesai
 
-# --- LOGIK INPUT (TETAP SAMA) ---
+# --- LOGIK INPUT ---
 if menu == "📝 Input Jurnal":
     st.header("Jurnal & Presensi Mengajar")
     kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
@@ -81,20 +79,20 @@ if menu == "📝 Input Jurnal":
             if mtr:
                 absen_ket = ", ".join([f"{n}({s})" for n, s in presensi.items() if s != "H"])
                 df_j = pd.DataFrame([{"Tanggal": str(tgl), "Kelas": kls, "Materi": mtr, "Keterangan_Absen": absen_ket if absen_ket else "Hadir Semua"}])
-                if simpan_data(df_j, "Jurnal"): st.success("✅ Data Berhasil Disimpan!")
-            else: st.warning("Materi tidak boleh kosong!")
+                if simpan_data(df_j, "Jurnal"): st.success("✅ Tersimpan!")
+            else: st.warning("Materi kosong!")
 
 elif menu == "📊 Input Nilai Siswa":
     st.header("Input Nilai Siswa")
     kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
     with st.form("form_nilai"):
-        mtr_n = st.text_input("Nama Tugas/Ujian (Contoh: UH-1)")
+        mtr_n = st.text_input("Nama Tugas/Ujian")
         nilai_list = []
         for nama in DAFTAR_SISWA[kls]:
             n_val = st.number_input(f"Nilai {nama}", 0, 100, 75)
             nilai_list.append({"Tanggal": str(datetime.now().date()), "Nama": nama, "Kelas": kls, "Materi": mtr_n, "Nilai": n_val})
         if st.form_submit_button("Simpan Nilai"):
-            if mtr_n and simpan_data(pd.DataFrame(nilai_list), "Nilai"): st.success("✅ Nilai Berhasil Disimpan!")
+            if mtr_n and simpan_data(pd.DataFrame(nilai_list), "Nilai"): st.success("✅ Berhasil!")
 
 elif menu == "👨‍🏫 Wali Kelas 8":
     st.header("Absensi Harian Kelas 8")
@@ -105,110 +103,64 @@ elif menu == "👨‍🏫 Wali Kelas 8":
             st_w = st.radio(nama, ["H", "S", "I", "A"], horizontal=True, key=f"wk_{nama}")
             wk_list.append({"Tanggal": str(tgl_w), "Nama": nama, "Status": st_w})
         if st.form_submit_button("Simpan Absensi Wali"):
-            if simpan_data(pd.DataFrame(wk_list), "AbsenWali"): st.success("✅ Absensi Berhasil Disimpan!")
+            if simpan_data(pd.DataFrame(wk_list), "AbsenWali"): st.success("✅ Berhasil!")
 
-# --- MENU 4: REKAP DATA (VERSI TERBARU: GRAFIK & CETAK) ---
+# --- MENU REKAP ---
 elif menu == "📂 Rekap Data":
     st.header("📂 Rekapitulasi & Laporan")
-    
-    # Tombol Mode Cetak (Menyederhanakan tampilan untuk PDF)
-    mode_cetak = st.checkbox("🔍 Aktifkan Mode Cetak (Hilangkan tombol-tombol agar rapi saat di PDF)")
+    mode_cetak = st.checkbox("🔍 Aktifkan Mode Cetak")
+    tab1, tab2, tab3 = st.tabs(["📜 Jurnal", "📊 Nilai", "👨‍🏫 Wali Kelas"])
 
-    tab1, tab2, tab3 = st.tabs(["📜 Rekap Jurnal & Absen", "📊 Grafik & Rekap Nilai", "👨‍🏫 Rekap Wali Kelas"])
-
-    # --- TAB 1: REKAP JURNAL ---
     with tab1:
-        st.subheader("Rekap Kehadiran Jurnal Mengajar")
         df_jurnal = ambil_data("Jurnal")
         if not df_jurnal.empty:
             df_jurnal['Tanggal'] = pd.to_datetime(df_jurnal['Tanggal']).dt.date
-            t_mulai, t_selesai = filter_periode_ui("jurnal")
-            kls_pilih = st.selectbox("Pilih Kelas:", list(DAFTAR_SISWA.keys()))
+            tm, ts = filter_periode_ui("jurnal")
+            kls_p = st.selectbox("Pilih Kelas:", list(DAFTAR_SISWA.keys()))
+            df_f = df_jurnal[(df_jurnal['Tanggal'] >= tm) & (df_jurnal['Tanggal'] <= ts) & (df_jurnal['Kelas'] == kls_p)]
             
-            df_j_fil = df_jurnal[(df_jurnal['Tanggal'] >= t_mulai) & (df_jurnal['Tanggal'] <= t_selesai) & (df_jurnal['Kelas'] == kls_pilih)]
-
-            if not df_j_fil.empty:
-                # Proses Hitung Absen
-                rekap_j_list = []
-                for _, row in df_j_fil.iterrows():
-                    status_hari_ini = {nama: "H" for nama in DAFTAR_SISWA[kls_pilih]}
-                    if row['Keterangan_Absen'] != "Hadir Semua":
-                        for p in row['Keterangan_Absen'].split(", "):
-                            for n in DAFTAR_SISWA[kls_pilih]:
-                                if f"{n}(" in p: status_hari_ini[n] = p.split("(")[1].replace(")", "")
-                    for n, s in status_hari_ini.items(): rekap_j_list.append({"Nama": n, "Status": s})
+            if not df_f.empty:
+                rekap_list = []
+                for _, row in df_f.iterrows():
+                    status_hari = {nama: "H" for nama in DAFTAR_SISWA[kls_p]}
+                    ket = str(row['Keterangan_Absen']) # Paksa jadi string untuk cegah error float
+                    if ket != "Hadir Semua" and ket != "nan":
+                        for p in ket.split(", "):
+                            for n in DAFTAR_SISWA[kls_p]:
+                                if f"{n}(" in p: 
+                                    try: status_hari[n] = p.split("(")[1].replace(")", "")
+                                    except: pass
+                    for n, s in status_hari.items(): rekap_list.append({"Nama": n, "Status": s})
                 
-                df_rekap_j = pd.DataFrame(rekap_j_list)
-                tabel_j = df_rekap_j.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
+                df_rkp = pd.DataFrame(rekap_list)
+                tabel = df_rkp.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
                 for c in ['H', 'S', 'I', 'A']:
-                    if c not in tabel_j.columns: tabel_j[c] = 0
-                tabel_j = tabel_j[['H', 'S', 'I', 'A']]
+                    if c not in tabel.columns: tabel[c] = 0
                 
-                # Header Laporan Formal
-                if mode_cetak:
-                    st.markdown(f"<h3 style='text-align: center;'>LAPORAN KEHADIRAN SISWA {kls_pilih.upper()}</h3>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='text-align: center;'>Periode: {t_mulai} s/d {t_selesai}</p>", unsafe_allow_html=True)
-                
-                st.table(tabel_j) # Menggunakan st.table agar semua data terlihat saat dicetak
-            else: st.warning("Data tidak ditemukan.")
+                if mode_cetak: st.table(tabel[['H', 'S', 'I', 'A']])
+                else: st.dataframe(tabel[['H', 'S', 'I', 'A']], width='stretch')
+            else: st.warning("Data kosong.")
 
-    # --- TAB 2: REKAP NILAI & GRAFIK ---
     with tab2:
-        st.subheader("Grafik Perkembangan Nilai")
         df_nilai = ambil_data("Nilai")
         if not df_nilai.empty:
-            # Filter Grafik
-            c_kls, c_sis = st.columns(2)
-            with c_kls: kls_n = st.selectbox("Pilih Kelas:", list(DAFTAR_SISWA.keys()), key="k_n")
-            with c_sis: nama_n = st.selectbox("Pilih Siswa:", DAFTAR_SISWA[kls_n], key="s_n")
-            
+            kls_n = st.selectbox("Pilih Kelas:", list(DAFTAR_SISWA.keys()), key="kn")
+            nama_n = st.selectbox("Pilih Siswa:", DAFTAR_SISWA[kls_n], key="sn")
             df_n_sis = df_nilai[(df_nilai['Nama'] == nama_n) & (df_nilai['Kelas'] == kls_n)]
-            
             if not df_n_sis.empty:
-                # GRAFIK GARIS (PERKEMBANGAN)
-                fig = px.line(df_n_sis, x="Materi", y="Nilai", title=f"Tren Nilai: {nama_n}", markers=True, text="Nilai")
-                fig.update_traces(textposition="top center")
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # GRAFIK BATANG (RATA-RATA KELAS)
-                df_kls_avg = df_nilai[df_nilai['Kelas'] == kls_n].groupby('Materi')['Nilai'].mean().reset_index()
-                fig2 = px.bar(df_kls_avg, x="Materi", y="Nilai", title=f"Rata-rata Nilai Kelas {kls_n}", color="Nilai")
-                st.plotly_chart(fig2, use_container_width=True)
+                fig = px.line(df_n_sis, x="Materi", y="Nilai", markers=True, title=f"Tren Nilai: {nama_n}")
+                st.plotly_chart(fig)
+            else: st.info("Belum ada nilai.")
 
-                st.write("**Detail Nilai:**")
-                st.dataframe(df_n_sis[['Tanggal', 'Materi', 'Nilai']], use_container_width=True)
-            else: st.info("Siswa ini belum memiliki data nilai.")
-
-    # --- TAB 3: REKAP WALI KELAS ---
     with tab3:
-        st.subheader("Rekap Absensi Wali Kelas")
         df_wk = ambil_data("AbsenWali")
         if not df_wk.empty:
             df_wk['Tanggal'] = pd.to_datetime(df_wk['Tanggal']).dt.date
-            tm, ts = filter_periode_ui("wali_fix")
+            tm, ts = filter_periode_ui("w")
             df_wk_f = df_wk[(df_wk['Tanggal'] >= tm) & (df_wk['Tanggal'] <= ts)]
-            
             if not df_wk_f.empty:
-                rekap_wk = df_wk_f.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
+                rkp_wk = df_wk_f.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
                 for c in ['H', 'S', 'I', 'A']:
-                    if c not in rekap_wk.columns: rekap_wk[c] = 0
-                rekap_wk = rekap_wk[['H', 'S', 'I', 'A']]
-                
-                if mode_cetak:
-                    st.markdown("<h3 style='text-align: center;'>REKAPITULASI ABSENSI HARIAN KELAS 8</h3>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='text-align: center;'>Periode: {tm} s/d {ts}</p>", unsafe_allow_html=True)
-                
-                st.table(rekap_wk)
-                
-                # Grafik Pie (Persentase Kehadiran Kelas)
-                st.markdown("### 📊 Persentase Kehadiran Kelas")
-                total_status = df_wk_f['Status'].value_counts().reset_index()
-                fig3 = px.pie(total_status, values='count', names='Status', color='Status', 
-                             color_discrete_map={'H':'green', 'S':'blue', 'I':'yellow', 'A':'red'})
-                st.plotly_chart(fig3)
-            else: st.warning("Data kosong.")
-
-    # INSTRUKSI CETAK
-    if not mode_cetak:
-        st.divider()
-        st.info("💡 **Tips Cetak ke PDF:** Centang 'Aktifkan Mode Cetak' di atas, lalu tekan **Ctrl + P** di keyboard laptop Anda. Pilih 'Save as PDF' pada menu printer.")
+                    if c not in rkp_wk.columns: rkp_wk[c] = 0
+                if mode_cetak: st.table(rkp_wk[['H', 'S', 'I', 'A']])
+                else: st.dataframe(rkp_wk[['H', 'S', 'I', 'A']], width='stretch')

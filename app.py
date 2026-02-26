@@ -130,4 +130,12 @@ elif menu == "📂 Rekap Data":
 
     with tab3:
         st.subheader("Rekap Absensi Wali Kelas 8")
-        df_wk = ambil_data("AbsenW
+        df_wk = ambil_data("AbsenWali")
+        if not df_wk.empty:
+            st.dataframe(df_wk, use_container_width=True)
+            # Menghitung statistik sederhana
+            st.write("**Total Ketidakhadiran per Siswa:**")
+            rekap_absen = df_wk[df_wk['Status'] != 'H'].groupby(['Nama', 'Status']).size().unstack(fill_value=0)
+            st.table(rekap_absen)
+        else:
+            st.info("Belum ada data absensi wali kelas.")

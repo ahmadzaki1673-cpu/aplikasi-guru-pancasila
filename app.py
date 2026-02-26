@@ -40,7 +40,29 @@ def simpan_data(df_baru, worksheet_name):
 st.sidebar.title("🛠️ MENU UTAMA")
 menu = st.sidebar.selectbox("Pilih Fitur:", ["📝 Input Jurnal", "📊 Input Nilai Siswa", "👨‍🏫 Wali Kelas 8", "📂 Rekap Data"])
 
-# --- KODE MENU LAINNYA (JURNAL, NILAI, WALI KELAS) TETAP SAMA ---
+# --- FUNGSI PEMBANTU UNTUK FILTER TANGGAL ---
+def filter_periode_ui(key_prefix):
+    st.markdown("### 🗓️ Atur Periode Rekap")
+    opsi = st.selectbox("Pilih Jenis Rekap:", ["Bulanan", "Persemester / Custom Tanggal"], key=f"opsi_{key_prefix}")
+    if opsi == "Bulanan":
+        c1, c2 = st.columns(2)
+        with c1:
+            list_bulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+            bulan_nama = st.selectbox("Pilih Bulan:", list_bulan, index=datetime.now().month - 1, key=f"bln_{key_prefix}")
+            bulan_angka = list_bulan.index(bulan_nama) + 1
+        with c2:
+            tahun = st.selectbox("Pilih Tahun:", [2024, 2025, 2026], index=1, key=f"thn_{key_prefix}")
+        tgl_mulai = datetime(tahun, bulan_angka, 1).date()
+        tgl_selesai = datetime(tahun, bulan_angka, calendar.monthrange(tahun, bulan_angka)[1]).date()
+    else:
+        c1, c2 = st.columns(2)
+        with c1:
+            tgl_mulai = st.date_input("Dari Tanggal", datetime.now().replace(day=1), key=f"start_{key_prefix}")
+        with c2:
+            tgl_selesai = st.date_input("Sampai Tanggal", datetime.now(), key=f"end_{key_prefix}")
+    return tgl_mulai, tgl_selesai
+
+# --- LOGIK INPUT (TETAP SAMA) ---
 if menu == "📝 Input Jurnal":
     st.header("Jurnal & Presensi Mengajar")
     kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
@@ -51,32 +73,24 @@ if menu == "📝 Input Jurnal":
         presensi = {}
         for nama in DAFTAR_SISWA[kls]:
             presensi[nama] = st.radio(nama, ["H", "S", "I", "A"], horizontal=True, key=f"j_{nama}")
-        
         if st.form_submit_button("Simpan Ke Jurnal"):
             if mtr:
                 absen_ket = ", ".join([f"{n}({s})" for n, s in presensi.items() if s != "H"])
                 df_j = pd.DataFrame([{"Tanggal": str(tgl), "Kelas": kls, "Materi": mtr, "Keterangan_Absen": absen_ket if absen_ket else "Hadir Semua"}])
-                if simpan_data(df_j, "Jurnal"):
-                    st.success("✅ Data Jurnal Berhasil Disimpan!")
-            else:
-                st.warning("Materi tidak boleh kosong!")
+                if simpan_data(df_j, "Jurnal"): st.success("✅ Tersimpan!")
+            else: st.warning("Materi kosong!")
 
 elif menu == "📊 Input Nilai Siswa":
     st.header("Input Nilai Siswa")
     kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
     with st.form("form_nilai"):
-        mtr_n = st.text_input("Nama Tugas/Ujian (Contoh: UH-1)")
+        mtr_n = st.text_input("Nama Tugas/Ujian")
         nilai_list = []
         for nama in DAFTAR_SISWA[kls]:
             n_val = st.number_input(f"Nilai {nama}", 0, 100, 75)
             nilai_list.append({"Tanggal": str(datetime.now().date()), "Nama": nama, "Kelas": kls, "Materi": mtr_n, "Nilai": n_val})
-        
         if st.form_submit_button("Simpan Nilai"):
-            if mtr_n:
-                if simpan_data(pd.DataFrame(nilai_list), "Nilai"):
-                    st.success(f"✅ Nilai {mtr_n} Berhasil Disimpan!")
-            else:
-                st.warning("Nama Materi/Ujian harus diisi!")
+            if mtr_n and simpan_data(pd.DataFrame(nilai_list), "Nilai"): st.success("✅ Nilai Tersimpan!")
 
 elif menu == "👨‍🏫 Wali Kelas 8":
     st.header("Absensi Harian Kelas 8")
@@ -86,103 +100,81 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         for nama in DAFTAR_SISWA["Kelas 8"]:
             st_w = st.radio(nama, ["H", "S", "I", "A"], horizontal=True, key=f"wk_{nama}")
             wk_list.append({"Tanggal": str(tgl_w), "Nama": nama, "Status": st_w})
-        
         if st.form_submit_button("Simpan Absensi Wali"):
-            if simpan_data(pd.DataFrame(wk_list), "AbsenWali"):
-                st.success("✅ Absensi Wali Kelas Berhasil Disimpan!")
+            if simpan_data(pd.DataFrame(wk_list), "AbsenWali"): st.success("✅ Absensi Wali Tersimpan!")
 
-# --- MENU 4: REKAP DATA (VERSI DROPDOWN DINAMIS) ---
+# --- MENU 4: REKAP DATA (UPGRADED) ---
 elif menu == "📂 Rekap Data":
     st.header("📂 Rekapitulasi Data")
-    tab1, tab2, tab3 = st.tabs(["📜 Rekap Jurnal", "📊 Rekap Nilai", "👨‍🏫 Rekap Absen Wali"])
+    tab1, tab2, tab3 = st.tabs(["📜 Rekap Jurnal & Absen", "📊 Rekap Nilai", "👨‍🏫 Rekap Wali Kelas 8"])
 
     with tab1:
-        st.subheader("Riwayat Jurnal Mengajar")
+        st.subheader("Rekap Kehadiran dari Jurnal Mengajar")
         df_jurnal = ambil_data("Jurnal")
         if not df_jurnal.empty:
-            filter_kls = st.multiselect("Filter Kelas:", list(DAFTAR_SISWA.keys()), default=list(DAFTAR_SISWA.keys()))
-            df_filtered = df_jurnal[df_jurnal['Kelas'].isin(filter_kls)]
-            st.dataframe(df_filtered, use_container_width=True)
-        else:
-            st.info("Belum ada data jurnal.")
+            df_jurnal['Tanggal'] = pd.to_datetime(df_jurnal['Tanggal']).dt.date
+            t_mulai, t_selesai = filter_periode_ui("jurnal")
+            
+            # Filter Data
+            df_j_fil = df_jurnal[(df_jurnal['Tanggal'] >= t_mulai) & (df_jurnal['Tanggal'] <= t_selesai)]
+            kls_pilih = st.selectbox("Pilih Kelas untuk Rekap:", list(DAFTAR_SISWA.keys()))
+            df_j_fil = df_j_fil[df_j_fil['Kelas'] == kls_pilih]
+
+            if not df_j_fil.empty:
+                # PROSES PECAH TEKS ABSEN
+                rekap_jurnal_list = []
+                for _, row in df_j_fil.iterrows():
+                    ket_absen = row['Keterangan_Absen']
+                    # Semua siswa di kelas tersebut dianggap H dulu
+                    status_hari_ini = {nama: "H" for nama in DAFTAR_SISWA[kls_pilih]}
+                    # Jika ada keterangan S/I/A, ubah statusnya
+                    if ket_absen != "Hadir Semua":
+                        parts = ket_absen.split(", ")
+                        for p in parts:
+                            for nama in DAFTAR_SISWA[kls_pilih]:
+                                if f"{nama}(" in p:
+                                    status = p.split("(")[1].replace(")", "")
+                                    status_hari_ini[nama] = status
+                    
+                    for nama, stt in status_hari_ini.items():
+                        rekap_jurnal_list.append({"Nama": nama, "Status": stt})
+                
+                df_rekap_j = pd.DataFrame(rekap_jurnal_list)
+                tabel_final_j = df_rekap_j.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
+                for c in ['H', 'S', 'I', 'A']:
+                    if c not in tabel_final_j.columns: tabel_final_j[c] = 0
+                
+                tabel_final_j = tabel_final_j[['H', 'S', 'I', 'A']]
+                tabel_final_j['Total Pertemuan'] = tabel_final_j.sum(axis=1)
+                st.write(f"Rekap Absensi **{kls_pilih}** Periode ini:")
+                st.dataframe(tabel_final_j, use_container_width=True)
+                
+                st.write("**Detail Jurnal:**")
+                st.dataframe(df_j_fil[['Tanggal', 'Materi', 'Keterangan_Absen']], use_container_width=True)
+            else:
+                st.warning("Tidak ada data jurnal untuk periode dan kelas ini.")
 
     with tab2:
         st.subheader("Rekap Nilai Siswa")
         df_nilai = ambil_data("Nilai")
         if not df_nilai.empty:
-            col1, col2 = st.columns(2)
-            with col1:
-                f_kls_n = st.selectbox("Pilih Kelas:", ["Semua"] + list(DAFTAR_SISWA.keys()))
-            with col2:
-                f_nama_n = st.text_input("Cari Nama Siswa:")
-            
-            df_n_fil = df_nilai.copy()
-            if f_kls_n != "Semua":
-                df_n_fil = df_n_fil[df_n_fil['Kelas'] == f_kls_n]
-            if f_nama_n:
-                df_n_fil = df_n_fil[df_n_fil['Nama'].str.contains(f_nama_n, case=False)]
-            
+            f_kls_n = st.selectbox("Pilih Kelas:", ["Semua"] + list(DAFTAR_SISWA.keys()), key="rekap_n_kls")
+            df_n_fil = df_nilai[df_nilai['Kelas'] == f_kls_n] if f_kls_n != "Semua" else df_nilai
             st.dataframe(df_n_fil, use_container_width=True)
-        else:
-            st.info("Belum ada data nilai.")
 
     with tab3:
-        st.subheader("Rekap Kehadiran Siswa Kelas 8 (Wali Kelas)")
+        st.subheader("Rekap Kehadiran (Wali Kelas 8)")
         df_wk = ambil_data("AbsenWali")
-        
         if not df_wk.empty:
             df_wk['Tanggal'] = pd.to_datetime(df_wk['Tanggal']).dt.date
+            tm, ts = filter_periode_ui("wali")
+            df_wk_f = df_wk[(df_wk['Tanggal'] >= tm) & (df_wk['Tanggal'] <= ts)]
             
-            st.markdown("### 🗓️ Atur Periode Rekap")
-            # DROPDOWN PILIHAN JENIS REKAP
-            opsi_rekap = st.selectbox("Pilih Jenis Rekap:", ["Bulanan", "Persemester / Custom Tanggal"])
-            
-            if opsi_rekap == "Bulanan":
-                c1, c2 = st.columns(2)
-                with c1:
-                    list_bulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", 
-                                 "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
-                    bulan_nama = st.selectbox("Pilih Bulan:", list_bulan, index=datetime.now().month - 1)
-                    bulan_angka = list_bulan.index(bulan_nama) + 1
-                with c2:
-                    tahun = st.selectbox("Pilih Tahun:", [2024, 2025, 2026], index=1)
-                
-                # Hitung tanggal mulai dan akhir bulan otomatis
-                tgl_mulai = datetime(tahun, bulan_angka, 1).date()
-                hari_terakhir = calendar.monthrange(tahun, bulan_angka)[1]
-                tgl_selesai = datetime(tahun, bulan_angka, hari_terakhir).date()
-                
-            else: # Jika Persemester / Custom
-                c1, c2 = st.columns(2)
-                with c1:
-                    tgl_mulai = st.date_input("Dari Tanggal", datetime.now().replace(day=1))
-                with c2:
-                    tgl_selesai = st.date_input("Sampai Tanggal", datetime.now())
-
-            # Filter Data
-            mask = (df_wk['Tanggal'] >= tgl_mulai) & (df_wk['Tanggal'] <= tgl_selesai)
-            df_wk_filtered = df_wk.loc[mask]
-            
-            if not df_wk_filtered.empty:
-                st.info(f"Menampilkan Data: **{tgl_mulai.strftime('%d %B %Y')}** s/d **{tgl_selesai.strftime('%d %B %Y')}**")
-                
-                # Pivot Table
-                rekap_final = df_wk_filtered.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
-                
-                # Pastikan H, S, I, A ada
-                for col in ['H', 'S', 'I', 'A']:
-                    if col not in rekap_final.columns:
-                        rekap_final[col] = 0
-                
-                rekap_final = rekap_final[['H', 'S', 'I', 'A']]
-                rekap_final['Total Hari'] = rekap_final.sum(axis=1)
-                
-                st.dataframe(rekap_final, use_container_width=True)
-                
-                # Tombol Download
-                csv = rekap_final.to_csv().encode('utf-8')
-                st.download_button(label="📥 Download Rekap", data=csv, file_name=f'rekap_{opsi_rekap}_{tgl_mulai}.csv', mime='text/csv')
-            else:
-                st.warning("Data tidak ditemukan pada periode ini.")
-        else:
-            st.info("Belum ada data.")
+            if not df_wk_f.empty:
+                rekap_wk = df_wk_f.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
+                for c in ['H', 'S', 'I', 'A']:
+                    if c not in rekap_wk.columns: rekap_wk[c] = 0
+                rekap_wk = rekap_wk[['H', 'S', 'I', 'A']]
+                rekap_wk['Total Hari'] = rekap_wk.sum(axis=1)
+                st.dataframe(rekap_wk, use_container_width=True)
+            else: st.warning("Data kosong pada periode ini.")

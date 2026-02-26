@@ -4,12 +4,10 @@ from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide")
+st.set_page_config(page_title="Jurnal Guru Pancasila", layout="wide", page_icon="📝")
 
 # --- 2. KONEKSI GOOGLE SHEETS ---
 conn = st.connection("gsheets", type=GSheetsConnection)
-
-# Mengambil URL langsung dari Secrets agar sinkron
 URL_SHEET = st.secrets["connections"]["gsheets"]["spreadsheet"]
 
 # --- 3. DATA MASTER SISWA ---
@@ -22,6 +20,7 @@ DAFTAR_SISWA = {
 # --- 4. FUNGSI AMBIL & SIMPAN ---
 def ambil_data(worksheet_name):
     try:
+        # Mengambil data terbaru tanpa cache agar rekap selalu update
         return conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
     except:
         return pd.DataFrame()
@@ -37,46 +36,52 @@ def simpan_data(df_baru, worksheet_name):
         st.error(f"Gagal menyimpan: {e}")
         return False
 
-# --- 5. TAMPILAN MENU ---
-st.sidebar.title("MENU UTAMA")
-menu = st.sidebar.radio("Pilih Fitur:", ["📝 Jurnal", "📊 Nilai Siswa", "👨‍🏫 Wali Kelas 8"])
+# --- 5. TAMPILAN MENU SIDEBAR ---
+st.sidebar.title("🛠️ MENU UTAMA")
+menu = st.sidebar.selectbox("Pilih Fitur:", ["📝 Input Jurnal", "📊 Input Nilai Siswa", "👨‍🏫 Wali Kelas 8", "📂 Rekap Data"])
 
-if menu == "📝 Jurnal":
-    st.header("Jurnal & Presensi")
+# --- MENU 1: INPUT JURNAL ---
+if menu == "📝 Input Jurnal":
+    st.header("Jurnal & Presensi Mengajar")
     kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
     with st.form("form_jurnal"):
         tgl = st.date_input("Tanggal", datetime.now())
-        mtr = st.text_input("Materi")
-        # Loop absen
+        mtr = st.text_input("Materi Pembelajaran")
+        st.write("**Presensi Siswa (Pilih jika tidak hadir):**")
         presensi = {}
         for nama in DAFTAR_SISWA[kls]:
-            presensi[nama] = st.radio(nama, ["H", "S", "I", "A"], horizontal=True, key=nama)
+            presensi[nama] = st.radio(nama, ["H", "S", "I", "A"], horizontal=True, key=f"j_{nama}")
         
-        if st.form_submit_button("Simpan Ke Google Sheets"):
+        if st.form_submit_button("Simpan Ke Jurnal"):
             if mtr:
                 absen_ket = ", ".join([f"{n}({s})" for n, s in presensi.items() if s != "H"])
-                df_j = pd.DataFrame([{"Tanggal": str(tgl), "Kelas": kls, "Materi": mtr, "Absen": absen_ket if absen_ket else "Hadir Semua"}])
+                df_j = pd.DataFrame([{"Tanggal": str(tgl), "Kelas": kls, "Materi": mtr, "Keterangan_Absen": absen_ket if absen_ket else "Hadir Semua"}])
                 if simpan_data(df_j, "Jurnal"):
-                    st.success("✅ Berhasil Disimpan!")
+                    st.success("✅ Data Jurnal Berhasil Disimpan!")
             else:
-                st.warning("Materi harus diisi!")
+                st.warning("Materi tidak boleh kosong!")
 
-elif menu == "📊 Nilai Siswa":
-    st.header("Input Nilai")
-    kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()), key="kls_nilai")
+# --- MENU 2: INPUT NILAI ---
+elif menu == "📊 Input Nilai Siswa":
+    st.header("Input Nilai Siswa")
+    kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
     with st.form("form_nilai"):
-        mtr_n = st.text_input("Materi/Ujian")
+        mtr_n = st.text_input("Nama Tugas/Ujian (Contoh: UH-1 Pancasila)")
         nilai_list = []
         for nama in DAFTAR_SISWA[kls]:
             n_val = st.number_input(f"Nilai {nama}", 0, 100, 75)
             nilai_list.append({"Tanggal": str(datetime.now().date()), "Nama": nama, "Kelas": kls, "Materi": mtr_n, "Nilai": n_val})
         
         if st.form_submit_button("Simpan Nilai"):
-            if simpan_data(pd.DataFrame(nilai_list), "Nilai"):
-                st.success("✅ Nilai Berhasil Masuk!")
+            if mtr_n:
+                if simpan_data(pd.DataFrame(nilai_list), "Nilai"):
+                    st.success(f"✅ Nilai {mtr_n} Berhasil Disimpan!")
+            else:
+                st.warning("Nama Materi/Ujian harus diisi!")
 
+# --- MENU 3: WALI KELAS ---
 elif menu == "👨‍🏫 Wali Kelas 8":
-    st.header("Absensi Khusus Kelas 8")
+    st.header("Absensi Harian Kelas 8")
     with st.form("form_wk"):
         tgl_w = st.date_input("Tanggal", datetime.now())
         wk_list = []
@@ -86,4 +91,43 @@ elif menu == "👨‍🏫 Wali Kelas 8":
         
         if st.form_submit_button("Simpan Absensi Wali"):
             if simpan_data(pd.DataFrame(wk_list), "AbsenWali"):
-                st.success("✅ Absensi Wali Kelas Tersimpan!")
+                st.success("✅ Absensi Wali Kelas Berhasil Disimpan!")
+
+# --- MENU 4: REKAP DATA (FITUR BARU) ---
+elif menu == "📂 Rekap Data":
+    st.header("📂 Rekapitulasi Data")
+    tab1, tab2, tab3 = st.tabs(["Rekap Jurnal", "Rekap Nilai", "Rekap Absen Wali"])
+
+    with tab1:
+        st.subheader("Riwayat Jurnal Mengajar")
+        df_jurnal = ambil_data("Jurnal")
+        if not df_jurnal.empty:
+            filter_kls = st.multiselect("Filter Kelas:", list(DAFTAR_SISWA.keys()), default=list(DAFTAR_SISWA.keys()))
+            df_filtered = df_jurnal[df_jurnal['Kelas'].isin(filter_kls)]
+            st.dataframe(df_filtered, use_container_width=True)
+        else:
+            st.info("Belum ada data jurnal.")
+
+    with tab2:
+        st.subheader("Rekap Nilai Siswa")
+        df_nilai = ambil_data("Nilai")
+        if not df_nilai.empty:
+            col1, col2 = st.columns(2)
+            with col1:
+                f_kls_n = st.selectbox("Pilih Kelas:", ["Semua"] + list(DAFTAR_SISWA.keys()))
+            with col2:
+                f_nama_n = st.text_input("Cari Nama Siswa:")
+            
+            df_n_fil = df_nilai.copy()
+            if f_kls_n != "Semua":
+                df_n_fil = df_n_fil[df_n_fil['Kelas'] == f_kls_n]
+            if f_nama_n:
+                df_n_fil = df_n_fil[df_n_fil['Nama'].str.contains(f_nama_n, case=False)]
+            
+            st.dataframe(df_n_fil, use_container_width=True)
+        else:
+            st.info("Belum ada data nilai.")
+
+    with tab3:
+        st.subheader("Rekap Absensi Wali Kelas 8")
+        df_wk = ambil_data("AbsenW

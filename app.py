@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import calendar
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. KONFIGURASI HALAMAN ---
@@ -39,7 +40,7 @@ def simpan_data(df_baru, worksheet_name):
 st.sidebar.title("🛠️ MENU UTAMA")
 menu = st.sidebar.selectbox("Pilih Fitur:", ["📝 Input Jurnal", "📊 Input Nilai Siswa", "👨‍🏫 Wali Kelas 8", "📂 Rekap Data"])
 
-# --- MENU 1: INPUT JURNAL ---
+# --- KODE MENU LAINNYA (JURNAL, NILAI, WALI KELAS) TETAP SAMA ---
 if menu == "📝 Input Jurnal":
     st.header("Jurnal & Presensi Mengajar")
     kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
@@ -60,7 +61,6 @@ if menu == "📝 Input Jurnal":
             else:
                 st.warning("Materi tidak boleh kosong!")
 
-# --- MENU 2: INPUT NILAI ---
 elif menu == "📊 Input Nilai Siswa":
     st.header("Input Nilai Siswa")
     kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
@@ -78,7 +78,6 @@ elif menu == "📊 Input Nilai Siswa":
             else:
                 st.warning("Nama Materi/Ujian harus diisi!")
 
-# --- MENU 3: WALI KELAS ---
 elif menu == "👨‍🏫 Wali Kelas 8":
     st.header("Absensi Harian Kelas 8")
     with st.form("form_wk"):
@@ -92,7 +91,7 @@ elif menu == "👨‍🏫 Wali Kelas 8":
             if simpan_data(pd.DataFrame(wk_list), "AbsenWali"):
                 st.success("✅ Absensi Wali Kelas Berhasil Disimpan!")
 
-# --- MENU 4: REKAP DATA (VERSI TERBARU) ---
+# --- MENU 4: REKAP DATA (VERSI DROPDOWN DINAMIS) ---
 elif menu == "📂 Rekap Data":
     st.header("📂 Rekapitulasi Data")
     tab1, tab2, tab3 = st.tabs(["📜 Rekap Jurnal", "📊 Rekap Nilai", "👨‍🏫 Rekap Absen Wali"])
@@ -132,45 +131,58 @@ elif menu == "📂 Rekap Data":
         df_wk = ambil_data("AbsenWali")
         
         if not df_wk.empty:
-            # Pastikan kolom Tanggal terbaca sebagai format Tanggal
             df_wk['Tanggal'] = pd.to_datetime(df_wk['Tanggal']).dt.date
             
-            # --- FILTER CUSTOM TANGGAL ---
             st.markdown("### 🗓️ Atur Periode Rekap")
-            c1, c2 = st.columns(2)
-            with c1:
-                tgl_mulai = st.date_input("Dari Tanggal", datetime.now().replace(day=1))
-            with c2:
-                tgl_selesai = st.date_input("Sampai Tanggal", datetime.now())
+            # DROPDOWN PILIHAN JENIS REKAP
+            opsi_rekap = st.selectbox("Pilih Jenis Rekap:", ["Bulanan", "Persemester / Custom Tanggal"])
             
-            # Filter Data berdasarkan Tanggal
+            if opsi_rekap == "Bulanan":
+                c1, c2 = st.columns(2)
+                with c1:
+                    list_bulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+                                 "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+                    bulan_nama = st.selectbox("Pilih Bulan:", list_bulan, index=datetime.now().month - 1)
+                    bulan_angka = list_bulan.index(bulan_nama) + 1
+                with c2:
+                    tahun = st.selectbox("Pilih Tahun:", [2024, 2025, 2026], index=1)
+                
+                # Hitung tanggal mulai dan akhir bulan otomatis
+                tgl_mulai = datetime(tahun, bulan_angka, 1).date()
+                hari_terakhir = calendar.monthrange(tahun, bulan_angka)[1]
+                tgl_selesai = datetime(tahun, bulan_angka, hari_terakhir).date()
+                
+            else: # Jika Persemester / Custom
+                c1, c2 = st.columns(2)
+                with c1:
+                    tgl_mulai = st.date_input("Dari Tanggal", datetime.now().replace(day=1))
+                with c2:
+                    tgl_selesai = st.date_input("Sampai Tanggal", datetime.now())
+
+            # Filter Data
             mask = (df_wk['Tanggal'] >= tgl_mulai) & (df_wk['Tanggal'] <= tgl_selesai)
             df_wk_filtered = df_wk.loc[mask]
             
             if not df_wk_filtered.empty:
-                st.write(f"Menampilkan data dari **{tgl_mulai}** sampai **{tgl_selesai}**")
+                st.info(f"Menampilkan Data: **{tgl_mulai.strftime('%d %B %Y')}** s/d **{tgl_selesai.strftime('%d %B %Y')}**")
                 
-                # Membuat Pivot Table untuk Hitung H, S, I, A
+                # Pivot Table
                 rekap_final = df_wk_filtered.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
                 
-                # Pastikan semua kolom H, S, I, A muncul meskipun nilainya 0
+                # Pastikan H, S, I, A ada
                 for col in ['H', 'S', 'I', 'A']:
                     if col not in rekap_final.columns:
                         rekap_final[col] = 0
                 
-                # Mengurutkan kolom agar rapi H-S-I-A
                 rekap_final = rekap_final[['H', 'S', 'I', 'A']]
-                
-                # Tambah Kolom Total Kehadiran
                 rekap_final['Total Hari'] = rekap_final.sum(axis=1)
                 
-                # Tampilkan Tabel
                 st.dataframe(rekap_final, use_container_width=True)
                 
                 # Tombol Download
                 csv = rekap_final.to_csv().encode('utf-8')
-                st.download_button(label="📥 Download Rekap (CSV)", data=csv, file_name=f'rekap_absen_{tgl_mulai}_{tgl_selesai}.csv', mime='text/csv')
+                st.download_button(label="📥 Download Rekap", data=csv, file_name=f'rekap_{opsi_rekap}_{tgl_mulai}.csv', mime='text/csv')
             else:
-                st.warning("Tidak ada data pada rentang tanggal tersebut.")
+                st.warning("Data tidak ditemukan pada periode ini.")
         else:
-            st.info("Belum ada data absensi wali kelas.")
+            st.info("Belum ada data.")

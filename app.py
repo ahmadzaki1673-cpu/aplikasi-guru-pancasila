@@ -4,7 +4,7 @@ from datetime import datetime
 import calendar
 import plotly.express as px
 from streamlit_gsheets import GSheetsConnection
-import io # Untuk memproses file di memori
+import io
 
 # --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Sistem Informasi Guru Pancasila", layout="wide", page_icon="📊")
@@ -38,14 +38,13 @@ def simpan_data(df_baru, worksheet_name):
         st.error(f"Gagal menyimpan: {e}")
         return False
 
-# FUNGSI BARU: KONVERSI KE EXCEL
 def buat_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=True, sheet_name='Rekap')
     return output.getvalue()
 
-# --- TAMPILAN MENU ---
+# --- 5. TAMPILAN MENU ---
 with st.sidebar:
     st.title("🛠️ MENU UTAMA")
     menu = st.selectbox("Pilih Fitur:", ["📝 Input Jurnal", "📊 Input Nilai Siswa", "👨‍🏫 Wali Kelas 8", "📂 Rekap Data"])
@@ -69,15 +68,15 @@ def filter_periode_ui(key_prefix):
         with c2: tgl_selesai = st.date_input("Sampai Tanggal", datetime.now(), key=f"end_{key_prefix}")
     return tgl_mulai, tgl_selesai
 
-# --- LOGIK INPUT (DISINGKAT AGAR FOKUS KE REKAP) ---
+# --- LOGIK INPUT ---
 if menu == "📝 Input Jurnal":
     st.header("Jurnal & Presensi Mengajar")
     kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
     with st.form("form_jurnal"):
         tgl = st.date_input("Tanggal", datetime.now()); mtr = st.text_input("Materi Pembelajaran")
         presensi = {}
-        for nama in DAFTAR_SISWA[kls]: presensi[nama] = st.radio(nama, ["H", "S", "I", "A"], horizontal=True)
-        if st.form_submit_button("Simpan"):
+        for nama in DAFTAR_SISWA[kls]: presensi[nama] = st.radio(nama, ["H", "S", "I", "A"], horizontal=True, key=f"p_{nama}")
+        if st.form_submit_button("Simpan Ke Jurnal"):
             absen_ket = ", ".join([f"{n}({s})" for n, s in presensi.items() if s != "H"])
             df_j = pd.DataFrame([{"Tanggal": str(tgl), "Kelas": kls, "Materi": mtr, "Keterangan_Absen": absen_ket if absen_ket else "Hadir Semua"}])
             if simpan_data(df_j, "Jurnal"): st.success("✅ Tersimpan!")
@@ -86,8 +85,7 @@ elif menu == "📊 Input Nilai Siswa":
     st.header("Input Nilai Siswa")
     kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
     with st.form("form_nilai"):
-        mtr_n = st.text_input("Nama Tugas/Ujian")
-        nilai_list = []
+        mtr_n = st.text_input("Nama Tugas/Ujian"); nilai_list = []
         for nama in DAFTAR_SISWA[kls]:
             n_val = st.number_input(f"Nilai {nama}", 0, 100, 75)
             nilai_list.append({"Tanggal": str(datetime.now().date()), "Nama": nama, "Kelas": kls, "Materi": mtr_n, "Nilai": n_val})
@@ -97,21 +95,17 @@ elif menu == "📊 Input Nilai Siswa":
 elif menu == "👨‍🏫 Wali Kelas 8":
     st.header("Absensi Harian Kelas 8")
     with st.form("form_wk"):
-        tgl_w = st.date_input("Tanggal", datetime.now())
-        wk_list = []
+        tgl_w = st.date_input("Tanggal", datetime.now()); wk_list = []
         for nama in DAFTAR_SISWA["Kelas 8"]:
-            st_w = st.radio(nama, ["H", "S", "I", "A"], horizontal=True)
+            st_w = st.radio(nama, ["H", "S", "I", "A"], horizontal=True, key=f"w_{nama}")
             wk_list.append({"Tanggal": str(tgl_w), "Nama": nama, "Status": st_w})
-        if st.form_submit_button("Simpan"):
+        if st.form_submit_button("Simpan Absensi Wali"):
             if simpan_data(pd.DataFrame(wk_list), "AbsenWali"): st.success("✅ Berhasil!")
 
-# --- MENU REKAP (VERSI TOMBOL DOWNLOAD JELAS) ---
+# --- MENU REKAP DATA (VERSI LENGKAP & NO ERROR) ---
 elif menu == "📂 Rekap Data":
     st.header("📂 Rekapitulasi & Laporan")
-    
-    # Mode Cetak untuk menyembunyikan elemen non-cetak
     mode_cetak = st.checkbox("🔍 Aktifkan Mode Cetak (Sembunyikan tombol & sidebar)")
-    
     tab1, tab2, tab3 = st.tabs(["📜 Jurnal & Absen", "📊 Nilai Siswa", "👨‍🏫 Wali Kelas 8"])
 
     with tab1:
@@ -119,13 +113,9 @@ elif menu == "📂 Rekap Data":
         if not df_jurnal.empty:
             df_jurnal['Tanggal'] = pd.to_datetime(df_jurnal['Tanggal']).dt.date
             tm, ts = filter_periode_ui("jurnal")
-            kls_p = st.selectbox("Pilih Kelas:", list(DAFTAR_SISWA.keys()), key="pilih_kls_jurnal")
-            
-            # Filter Data
+            kls_p = st.selectbox("Pilih Kelas:", list(DAFTAR_SISWA.keys()), key="k_j")
             df_f = df_jurnal[(df_jurnal['Tanggal'] >= tm) & (df_jurnal['Tanggal'] <= ts) & (df_jurnal['Kelas'] == kls_p)]
-            
             if not df_f.empty:
-                # Proses data rekap...
                 rekap_list = []
                 for _, row in df_f.iterrows():
                     status_hari = {nama: "H" for nama in DAFTAR_SISWA[kls_p]}
@@ -137,31 +127,52 @@ elif menu == "📂 Rekap Data":
                                     try: status_hari[n] = p.split("(")[1].replace(")", "")
                                     except: pass
                     for n, s in status_hari.items(): rekap_list.append({"Nama": n, "Status": s})
-                
                 df_rkp = pd.DataFrame(rekap_list)
                 tabel = df_rkp.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
                 for c in ['H', 'S', 'I', 'A']:
                     if c not in tabel.columns: tabel[c] = 0
                 tabel = tabel[['H', 'S', 'I', 'A']]
-                
-                # --- BAGIAN TAMPILAN ---
-                st.subheader(f"Hasil Rekap {kls_p}")
+                st.write(f"**Rekap Absensi Jurnal - {kls_p}**")
+                if mode_cetak: st.table(tabel)
+                else: 
+                    st.dataframe(tabel, use_container_width=True)
+                    st.download_button("📥 UNDUH REKAP JURNAL (EXCEL)", buat_excel(tabel), f"Jurnal_{kls_p}.xlsx", type="primary")
+            else: st.warning("Data tidak ditemukan.")
+
+    with tab2:
+        df_nilai = ambil_data("Nilai")
+        if not df_nilai.empty:
+            kls_n = st.selectbox("Pilih Kelas:", list(DAFTAR_SISWA.keys()), key="k_n")
+            nama_n = st.selectbox("Pilih Siswa:", DAFTAR_SISWA[kls_n], key="s_n")
+            df_n_sis = df_nilai[(df_nilai['Nama'] == nama_n) & (df_nilai['Kelas'] == kls_n)]
+            if not df_n_sis.empty:
+                st.plotly_chart(px.line(df_n_sis, x="Materi", y="Nilai", markers=True, title=f"Tren {nama_n}"))
+                if not mode_cetak:
+                    st.download_button("📥 UNDUH NILAI (EXCEL)", buat_excel(df_n_sis), f"Nilai_{nama_n}.xlsx", type="primary")
+
+    with tab3:
+        st.subheader("Rekap Absensi Wali Kelas 8")
+        df_wk = ambil_data("AbsenWali")
+        if not df_wk.empty:
+            df_wk['Tanggal'] = pd.to_datetime(df_wk['Tanggal']).dt.date
+            tw_m, tw_s = filter_periode_ui("wali")
+            df_wk_f = df_wk[(df_wk['Tanggal'] >= tw_m) & (df_wk['Tanggal'] <= tw_s)]
+            if not df_wk_f.empty:
+                rkp_wk = df_wk_f.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
+                for c in ['H', 'S', 'I', 'A']:
+                    if c not in rkp_wk.columns: rkp_wk[c] = 0
+                rkp_wk = rkp_wk[['H', 'S', 'I', 'A']]
                 
                 if mode_cetak:
-                    st.table(tabel)
+                    st.table(rkp_wk)
                 else:
-                    st.dataframe(tabel, use_container_width=True)
-                    # TOMBOL DOWNLOAD (Dibuat mencolok)
+                    st.dataframe(rkp_wk, use_container_width=True)
                     st.divider()
-                    data_excel = buat_excel(tabel)
                     st.download_button(
-                        label="📥 KLIK DI SINI UNTUK UNDUH EXEL",
-                        data=data_excel,
-                        file_name=f"Rekap_Jurnal_{kls_p}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        type="primary" # Membuat tombol jadi warna Biru
+                        label="📥 KLIK UNTUK UNDUH REKAP WALI (EXCEL)", 
+                        data=buat_excel(rkp_wk), 
+                        file_name="Rekap_Wali_Kelas8.xlsx", 
+                        type="primary"
                     )
-            else:
-                st.warning("Data untuk periode/kelas ini tidak ditemukan.")
-
-    # ... (Bagian Nilai dan Wali Kelas juga ditambahkan logika yang sama)
+            else: st.warning("Tidak ada data di rentang tanggal ini.")
+        else: st.info("Data Absensi Wali Kelas belum tersedia. Silakan input data terlebih dahulu.")

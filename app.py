@@ -20,7 +20,6 @@ DAFTAR_SISWA = {
 # --- 4. FUNGSI AMBIL & SIMPAN ---
 def ambil_data(worksheet_name):
     try:
-        # Mengambil data terbaru tanpa cache agar rekap selalu update
         return conn.read(spreadsheet=URL_SHEET, worksheet=worksheet_name, ttl=0)
     except:
         return pd.DataFrame()
@@ -66,7 +65,7 @@ elif menu == "📊 Input Nilai Siswa":
     st.header("Input Nilai Siswa")
     kls = st.selectbox("Pilih Kelas", list(DAFTAR_SISWA.keys()))
     with st.form("form_nilai"):
-        mtr_n = st.text_input("Nama Tugas/Ujian (Contoh: UH-1 Pancasila)")
+        mtr_n = st.text_input("Nama Tugas/Ujian (Contoh: UH-1)")
         nilai_list = []
         for nama in DAFTAR_SISWA[kls]:
             n_val = st.number_input(f"Nilai {nama}", 0, 100, 75)
@@ -93,10 +92,10 @@ elif menu == "👨‍🏫 Wali Kelas 8":
             if simpan_data(pd.DataFrame(wk_list), "AbsenWali"):
                 st.success("✅ Absensi Wali Kelas Berhasil Disimpan!")
 
-# --- MENU 4: REKAP DATA (FITUR BARU) ---
+# --- MENU 4: REKAP DATA (VERSI TERBARU) ---
 elif menu == "📂 Rekap Data":
     st.header("📂 Rekapitulasi Data")
-    tab1, tab2, tab3 = st.tabs(["Rekap Jurnal", "Rekap Nilai", "Rekap Absen Wali"])
+    tab1, tab2, tab3 = st.tabs(["📜 Rekap Jurnal", "📊 Rekap Nilai", "👨‍🏫 Rekap Absen Wali"])
 
     with tab1:
         st.subheader("Riwayat Jurnal Mengajar")
@@ -129,13 +128,49 @@ elif menu == "📂 Rekap Data":
             st.info("Belum ada data nilai.")
 
     with tab3:
-        st.subheader("Rekap Absensi Wali Kelas 8")
+        st.subheader("Rekap Kehadiran Siswa Kelas 8 (Wali Kelas)")
         df_wk = ambil_data("AbsenWali")
+        
         if not df_wk.empty:
-            st.dataframe(df_wk, use_container_width=True)
-            # Menghitung statistik sederhana
-            st.write("**Total Ketidakhadiran per Siswa:**")
-            rekap_absen = df_wk[df_wk['Status'] != 'H'].groupby(['Nama', 'Status']).size().unstack(fill_value=0)
-            st.table(rekap_absen)
+            # Pastikan kolom Tanggal terbaca sebagai format Tanggal
+            df_wk['Tanggal'] = pd.to_datetime(df_wk['Tanggal']).dt.date
+            
+            # --- FILTER CUSTOM TANGGAL ---
+            st.markdown("### 🗓️ Atur Periode Rekap")
+            c1, c2 = st.columns(2)
+            with c1:
+                tgl_mulai = st.date_input("Dari Tanggal", datetime.now().replace(day=1))
+            with c2:
+                tgl_selesai = st.date_input("Sampai Tanggal", datetime.now())
+            
+            # Filter Data berdasarkan Tanggal
+            mask = (df_wk['Tanggal'] >= tgl_mulai) & (df_wk['Tanggal'] <= tgl_selesai)
+            df_wk_filtered = df_wk.loc[mask]
+            
+            if not df_wk_filtered.empty:
+                st.write(f"Menampilkan data dari **{tgl_mulai}** sampai **{tgl_selesai}**")
+                
+                # Membuat Pivot Table untuk Hitung H, S, I, A
+                rekap_final = df_wk_filtered.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
+                
+                # Pastikan semua kolom H, S, I, A muncul meskipun nilainya 0
+                for col in ['H', 'S', 'I', 'A']:
+                    if col not in rekap_final.columns:
+                        rekap_final[col] = 0
+                
+                # Mengurutkan kolom agar rapi H-S-I-A
+                rekap_final = rekap_final[['H', 'S', 'I', 'A']]
+                
+                # Tambah Kolom Total Kehadiran
+                rekap_final['Total Hari'] = rekap_final.sum(axis=1)
+                
+                # Tampilkan Tabel
+                st.dataframe(rekap_final, use_container_width=True)
+                
+                # Tombol Download
+                csv = rekap_final.to_csv().encode('utf-8')
+                st.download_button(label="📥 Download Rekap (CSV)", data=csv, file_name=f'rekap_absen_{tgl_mulai}_{tgl_selesai}.csv', mime='text/csv')
+            else:
+                st.warning("Tidak ada data pada rentang tanggal tersebut.")
         else:
             st.info("Belum ada data absensi wali kelas.")

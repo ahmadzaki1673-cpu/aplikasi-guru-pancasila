@@ -59,7 +59,8 @@ def filter_periode_ui(key_prefix):
             bulan_nama = st.selectbox("Pilih Bulan:", list_bulan, index=datetime.now().month - 1, key=f"bln_{key_prefix}")
             bulan_angka = list_bulan.index(bulan_nama) + 1
         with c2:
-            tahun = st.selectbox("Pilih Tahun:", [2024, 2025, 2026], index=1, key=f"thn_{key_prefix}")
+            # UBAH DI SINI: Menghapus 2024 & 2025, menambahkan 2027 & 2028
+            tahun = st.selectbox("Pilih Tahun:", [2026, 2027, 2028], index=0, key=f"thn_{key_prefix}")
         tgl_mulai = datetime(tahun, bulan_angka, 1).date()
         tgl_selesai = datetime(tahun, bulan_angka, calendar.monthrange(tahun, bulan_angka)[1]).date()
     else:
@@ -200,4 +201,5 @@ elif menu == "📂 Rekap Data":
                     )
             else: st.warning("Tidak ada data di rentang tanggal ini.")
         else: st.info("Data Absensi Wali Kelas belum tersedia. Silakan input data terlebih dahulu.")
+
 

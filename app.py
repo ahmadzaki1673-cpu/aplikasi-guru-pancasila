@@ -111,11 +111,28 @@ elif menu == "📂 Rekap Data":
     with tab1:
         df_jurnal = ambil_data("Jurnal")
         if not df_jurnal.empty:
+            # Pastikan kolom Tanggal dikenali sebagai tanggal
             df_jurnal['Tanggal'] = pd.to_datetime(df_jurnal['Tanggal']).dt.date
             tm, ts = filter_periode_ui("jurnal")
             kls_p = st.selectbox("Pilih Kelas:", list(DAFTAR_SISWA.keys()), key="k_j")
+            
+            # Filter Data berdasarkan tanggal dan kelas
             df_f = df_jurnal[(df_jurnal['Tanggal'] >= tm) & (df_jurnal['Tanggal'] <= ts) & (df_jurnal['Kelas'] == kls_p)]
+            
             if not df_f.empty:
+                # --- 1. REKAP ISI JURNAL (MATERI) ---
+                st.subheader(f"📜 Rekap Materi Pembelajaran - {kls_p}")
+                df_materi = df_f[['Tanggal', 'Materi']].sort_values(by='Tanggal')
+                
+                if mode_cetak:
+                    st.table(df_materi) # Tampilan statis untuk cetak
+                else:
+                    st.dataframe(df_materi, use_container_width=True, hide_index=True)
+                
+                st.divider() # Garis pembatas
+
+                # --- 2. REKAP ABSENSI (H, S, I, A) ---
+                st.subheader(f"📊 Rekap Kehadiran Siswa - {kls_p}")
                 rekap_list = []
                 for _, row in df_f.iterrows():
                     status_hari = {nama: "H" for nama in DAFTAR_SISWA[kls_p]}
@@ -127,17 +144,24 @@ elif menu == "📂 Rekap Data":
                                     try: status_hari[n] = p.split("(")[1].replace(")", "")
                                     except: pass
                     for n, s in status_hari.items(): rekap_list.append({"Nama": n, "Status": s})
+                
                 df_rkp = pd.DataFrame(rekap_list)
-                tabel = df_rkp.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
+                tabel_absen = df_rkp.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
                 for c in ['H', 'S', 'I', 'A']:
-                    if c not in tabel.columns: tabel[c] = 0
-                tabel = tabel[['H', 'S', 'I', 'A']]
-                st.write(f"**Rekap Absensi Jurnal - {kls_p}**")
-                if mode_cetak: st.table(tabel)
-                else: 
-                    st.dataframe(tabel, use_container_width=True)
-                    st.download_button("📥 UNDUH REKAP JURNAL (EXCEL)", buat_excel(tabel), f"Jurnal_{kls_p}.xlsx", type="primary")
-            else: st.warning("Data tidak ditemukan.")
+                    if c not in tabel_absen.columns: tabel_absen[c] = 0
+                tabel_absen = tabel_absen[['H', 'S', 'I', 'A']]
+                
+                if mode_cetak:
+                    st.table(tabel_absen)
+                else:
+                    st.dataframe(tabel_absen, use_container_width=True)
+                    
+                    # Tombol download sekarang menggabungkan info Jurnal & Absen jika perlu
+                    # Untuk mempermudah, kita buatkan download untuk tabel absennya
+                    st.download_button("📥 UNDUH REKAP ABSENSI (EXCEL)", buat_excel(tabel_absen), f"Absen_{kls_p}.xlsx", type="primary")
+                    st.download_button("📥 UNDUH DAFTAR MATERI (EXCEL)", buat_excel(df_materi), f"Materi_{kls_p}.xlsx")
+            else:
+                st.warning("Data tidak ditemukan untuk periode dan kelas ini.")
 
     with tab2:
         df_nilai = ambil_data("Nilai")
@@ -176,3 +200,4 @@ elif menu == "📂 Rekap Data":
                     )
             else: st.warning("Tidak ada data di rentang tanggal ini.")
         else: st.info("Data Absensi Wali Kelas belum tersedia. Silakan input data terlebih dahulu.")
+
